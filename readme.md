@@ -53,11 +53,10 @@ Text (for the "background text" in the form and the text entries in the records 
 Field names are 2 bytes per char plus a field type char:
 
 1. 0x90 normal, 0x91 Underline, 0x92 Bold, 0x94 Italic
-2. Ascii char | 0x80 (high bit set)
+2. Ascii char | 0x80 (high bit set), 0x80 is a space
 
-Special case for char -- end of field:
+Special case for chars -- end of field:
 
-* 0x80 space char
 * 0x81 Freeform field type
 * 0x82 Numeric
 * 0x83 Date
@@ -68,9 +67,23 @@ Special case for char -- end of field:
 * The file extension is ".FOL"
 * There is a special string at byte 9 [GERBILDB](http://fileformats.archiveteam.org/wiki/PFS:First_Choice)
 
-6. Record types
-7. Header
-8. Form Description
-9. Data Record
-10. Deleted Record
-11. 
+### Record types
+* Header
+* "Half Header" (Optional record 4)
+* Empty
+* Form description (+ continuations)
+* Data record (+ continuations)
+
+### Header
+| Pos | Size | Description |
+|----:|-----:|:------------|
+|0|2|Post-header block - 1|
+|2|2|Last used block - 1|
+|4|2|File blocks - 1|
+|6|2|Data records|
+|8|13|Magic string|
+|21|2||
+### Form Description
+### Data Record
+### Deleted Record
+### Continuation
