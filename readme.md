@@ -5,6 +5,8 @@ This is a python program to convert PFS:First Choice database files.
 ## Author
 Paul H Alfille 2020
 
+![Screenshot](FirstChoice.png)
+
 ## History
 ### Why First Choice
 I found First Choice a great solution for indexing collections for myself and my wife, back in the early DOS days. Although Windows and other developements left that program behind, the program still functions, especially in DOSBOX. I run it on Windows, Linux, Mac and even a Chromebook.
@@ -32,3 +34,43 @@ While extracting data is nice, it would be nice to have a server-based multiuser
 ## License
 
 FirstChoice  is released under the terms of MIT License.
+
+## Details
+Here follows a summary of the discovered fields in a FirstChoice Database.
+
+### Size
+All files are in 128 byte blocks. The blocks have relatively set content, and if a record extends beyond 128 bytes, a continuation record follows
+### Numbers
+Numbers are 2-byte little endian unsigned integers. 
+### Text Encoding
+Text (for the "background text" in the form and the text entries in the records are 3-bytes per character:
+
+1. 0x80 normal, 0x83 subscript, 0x85 superscript
+2. 0xd0 nornal, 0xd1 _Underline_, 0xd2 **Bold**, 0xd4 *Italic*
+3. Ascii char | 0x80 (high bit set)
+
+### Field Encoding
+Field names are 2 bytes per char plus a field type char:
+
+1. 0x90 normal, 0x91 Underline, 0x92 Bold, 0x94 Italic
+2. Ascii char | 0x80 (high bit set)
+
+Special case for char -- end of field:
+
+* 0x80 space char
+* 0x81 Freeform field type
+* 0x82 Numeric
+* 0x83 Date
+* 0x84 Time
+* 0x85 Yes/No
+
+### Magic fields
+* The file extension is ".FOL"
+* There is a special string at byte 9 [GERBILDB](http://fileformats.archiveteam.org/wiki/PFS:First_Choice)
+
+6. Record types
+7. Header
+8. Form Description
+9. Data Record
+10. Deleted Record
+11. 
