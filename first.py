@@ -71,15 +71,16 @@ class Parser:
 		return True
 		
 	def ReadText( self, string ):
-		(l,) = struct.unpack( '>H', string[:2] )
+		l, d = self.apply_struct( '>H', string )
 		ll = 0
 		while ll < l:
 			# \r counts for 2
-			if string[ll+2] == 0x0d:
+			if d[ll] == 0x0d:
 				l -= 1
+				self.ods += 1
 			ll += 1 
 		#hexdump(string[:2])
-		return (l, string[ 2:l+2 ], string[l+2:]) 
+		return (l, d[:l], d[l:]) 
 		
 		
 	def _read(self):
@@ -106,7 +107,7 @@ class Parser:
 			print("GERB doesn't match")
 		self.fields = int(data[5])
 		self.formlength = data[6]
-		self.Q = data[7]
+		self.revisions = data[7]
 		if type(self).more_head != data[11]:
 			print("Rest of header doesn't match")
 		if not self.all_zeros(data[12]):
@@ -182,6 +183,11 @@ class Parser:
 #		else:
 #			print('Stack       {:02X}'.format( byte) )
 
+		self.chars += 1 # All bytes, then substract 2 for background text and 1 for field name
+		if byte == 0x0d:
+			#purely informational
+			self.ods += 1
+
 		if byte == 0x81:
 			script = 'normal'
 		elif byte == 0x85:
@@ -205,6 +211,7 @@ class Parser:
 		if script is not None and font is not None and self.byte0 is not None:
 			# Background text
 			self.TextLetter()
+			self.chars -= 2
 			return self.FieldString()
 
 		if byte == 0x90:
@@ -220,6 +227,7 @@ class Parser:
 		if font is not None and self.byte1 is not None:
 			# Field name
 			s = self.TextString() + self.hexbyte()
+			self.chars -= 1
 			self.FieldLetter()
 			return s
 			
@@ -233,13 +241,12 @@ class Parser:
 	def Data( self, d ):
 		formblocks, d = self.apply_struct( type(self).form_data_block, d )
 		tot_length = 0
+		self.ods = 0
 		for i in range( self.fields ):
 			le,li,d = self.ReadText( d )
 			tot_length += le
 			print("len=",le,"=>",li)
-			#hexdump(li)
-			#print( ''.join(self.ReadRichText(b) for b in li)+self.ReadRichText(None) )
-		#print("Total length", tot_length)
+		print("Total length = ", tot_length, "0x0d = ",self.ods)
 	
 	def Half( self, d ):
 		formoffset, d = self.apply_struct( type(self).half_block, d )
@@ -249,20 +256,21 @@ class Parser:
 			hexdump(d)
 	
 	def Form( self,d ):
-		formblocks, unsure, formlines, d = self.apply_struct( type(self).form_format, d )
-		print("Formblocks=",formblocks,"Unknown=",unsure,"formlines=",formlines)
+		formblocks, xformlength, formlines, d = self.apply_struct( type(self).form_format, d )
+		print("Formblocks=",formblocks,"xFormlength=",xformlength,"formlines=",formlines)
 		tot_length = 0
+		self.ods = 0
+		self.chars = 0
 		for i in range( self.fields ):
 			le,li,d = self.ReadText( d )
 			tot_length += le
-			print( ''.join(self.ReadRichText(b) for b in li)+self.ReadRichText(None) )
-		print("Total length", tot_length)
+			print( '[{}]'.format(le)+''.join(self.ReadRichText(b) for b in li)+self.ReadRichText(None) )
+		print("Total length = ", tot_length, "0x0d = ",self.ods, " chars = ",self.chars)
 		if tot_length != self.fields + self.formlength - 1:
 			print("Formlength in header doesn't match computed");
+		if xformlength != tot_length + formlines + 1:
+			print("xFormlength in record doesn't match computed");
 
-		#print( self.ReadText( d ) )
-		#print( ''.join(self.ReadRichText(b) for b in d)+self.ReadRichText(None) )
-	
 	def Block2Memory( self ):
 		blocktype, blockdata = ( struct.unpack( type(self).nonheader_format, self.block ) )
 		if blocktype == 0x82:
