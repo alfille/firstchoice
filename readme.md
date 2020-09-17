@@ -5,6 +5,8 @@ This is a python program to convert PFS:First Choice database files.
 ## Author
 Paul H Alfille 2020
 
+## First Choice
+
 ![Screenshot](FirstChoice.png)
 
 ## History
@@ -43,34 +45,7 @@ All files are in 128 byte blocks. The blocks have relatively set content, and if
 ### Numbers
 Numbers are generally 2-byte little endian unsigned integers. Big Endian is used in some form definition fields!
 
-### Background Text Encoding
-Text (for the "background text" in the form) are 3-bytes per character:
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|1|byte|Ascii char + highbit|
-|||0x80 for space|
-|1|byte|0xd0 nornal, 0xd1 _Underline_, 0xd2 **Bold**, 0xd4 *Italic*|
-|1|byte|0x81 normal, 0x83 subscript, 0x85 superscript|
-
-### Field Name Encoding
-Field names are 2 bytes per char plus a field type char:
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|1|byte|Ascii char + highbit|
-|||0x80 for space|
-||| 0x81 Freeform field type|
-||| 0x82 Numeric|
-||| 0x83 Date|
-||| 0x84 Time|
-||| 0x85 Yes/No |
-|1|byte|0x90 normal, 0x91 _Underline_, 0x92 **Bold**, 0x94 *Italic*|
-
-0x20 for trailing spaces
-0x0d for trailing CR
-
-### Magic fields
+### "Magic" File ID
 * The file extension is ".FOL"
 * There is a special string at byte 9 [GERBILDB](http://fileformats.archiveteam.org/wiki/PFS:First_Choice)
 
@@ -87,13 +62,13 @@ Always first block (block 0)
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
 |0|2|int|Post-header block|
-|2|2|int|Last used block|
+|2|2|int|Last used block **not always accurate** |
 |4|2|int|Total file blocks - 1|
 |6|2|int|Data records|
 |8|14|chars|Magic string '0x0cGERBILDB3   0x00'|
 |22|2|int|Number of Database fields (+1)|
-|24|2|int|Form length in chars (see below)|
-|26|2|int|more1|
+|24|2|int|Form length in chars? |
+|26|2|int|Form revisions (starts at 1)|
 |28|2|int|more2|
 |30|2|int|more3|
 |32|2|int|more4|
@@ -101,7 +76,8 @@ Always first block (block 0)
 |36|2|int|more6|
 |38|7|chars|Seems fixed as '0xff 0xff 0x00 0x00 0x02 0x00 0x08'|
 
-### Form Description
+
+### Form Description Record
 note that "int-BE" is Big Endian integer
 
 | Pos | Size |Type| Description |
@@ -111,6 +87,16 @@ note that "int-BE" is Big Endian integer
 |4|2|int-BE|lines in form screen|
 |6|2|int-BE|length+lines+1|
 |8|120|data|form fields| 
+
+#### Screen Layout
+![Record screen shot](Record.png)
+
+* Fixed width ascii chars
+* 78 char width (border line lanes 2 chars)
+* 20 displays lines (but will scroll down)
+* No position addressing. All layout from upper left.
+* Move to next line with 0x0d or line wrap
+
 #### Form Field 
 Background text, CR and spaces are optional and may be multiple.
 
@@ -118,9 +104,37 @@ Background text, CR and spaces are optional and may be multiple.
 |-----:|:---|:------------|
 |2|int-BE|Field size (in bytes)|
 |3X|text chars| Background text (See Background Text Encoding)|
-|1X|char| 0x0d Carriage returns |
+|1X|char| 0x0d Carriage return |
 |2X|char|Field name (See Field Name Encoding)|
-|1X|char| 0x0d Carriage returns |
+|1X|char| 0x20 space|
+|1X|char| 0x0d Carriage return |
+
+#### Background Text Encoding
+Text (for the "background text" in the form) are 3-bytes per character:
+
+| Size |Type| Description |
+|-----:|:---|:------------|
+|1|byte|Ascii char + highbit|
+|||0x80 for space|
+|1|byte|0xd0 nornal, 0xd1 _Underline_, 0xd2 **Bold**, 0xd4 *Italic*|
+|1|byte|0x81 normal, 0x83 subscript, 0x85 superscript|
+
+#### Field Name Encoding
+Field names are 2 bytes per char plus a field type char:
+
+| Size |Type| Description |
+|-----:|:---|:------------|
+|1|byte|Ascii char + highbit|
+|||0x80 for space|
+||| 0x81 Freeform field type|
+||| 0x82 Numeric|
+||| 0x83 Date|
+||| 0x84 Time|
+||| 0x85 Yes/No |
+|1|byte|0x90 normal, 0x91 _Underline_, 0x92 **Bold**, 0x94 *Italic*|
+
+0x20 for trailing spaces
+0x0d for trailing CR
 
 ### Data Record
 | Pos | Size |Type| Description |
@@ -128,13 +142,16 @@ Background text, CR and spaces are optional and may be multiple.
 |0|2|int|0x81 Data record start|
 |2|2|int|total blocks (this + continuations)|
 
-### Data Field
+#### Data Field
 A 0x0d is added to end if next field in on another line
 
 | Size |Type| Description |
 |-----:|:---|:------------|
 |2|int-BE|Field size (in bytes)|
 |1X|chars|Text -- straight ascii|
+|1|char|0x0d **counts for 2 bytes** |
+
+Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
 
 ### Deleted Record / Empty Block
 | Pos | Size |Type| Description |
@@ -142,7 +159,7 @@ A 0x0d is added to end if next field in on another line
 |0|2|int|0|
 |2|126|chars|all 0x00|
 
-### Continuation
+### Continuation Record
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
 |0|2|int|0x01 Data continuation|
