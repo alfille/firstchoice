@@ -27,10 +27,10 @@ def validate( dbase ):
 
 class Parser:
 	# database header
-	header_format = '<4H14s6H7s'
+	header_format = '<4H14s7H5s'
 	nonheader_format = "<H126s"
 	gerb = b'\x0cGERBILDB3   \x00'
-	more_head = b'\xff\xff\x00\x00\x02\x00\x08'
+	more_head = b'x00\x00\x02\x00\x08'
 	form_format = '>BxHH'
 	form_data_block = '<H'
 	half_block = '<H'
@@ -108,9 +108,10 @@ class Parser:
 		self.fields = int(data[5])
 		self.formlength = data[6]
 		self.revisions = data[7]
-		if type(self).more_head != data[11]:
+		self.programstart = data[11]
+		if type(self).more_head != data[12]:
 			print("Rest of header doesn't match")
-		if not self.all_zeros(data[12]):
+		if not self.all_zeros(data[13]):
 			print("Header block unzeroed")
 
 	def hexbyte( self ):
@@ -248,6 +249,16 @@ class Parser:
 			print("len=",le,"=>",li)
 		print("Total length = ", tot_length, "0x0d = ",self.ods)
 	
+	def Program( self, d ):
+		formblocks, d = self.apply_struct( type(self).form_data_block, d )
+		tot_length = 0
+		self.ods = 0
+		for i in range( self.fields ):
+			le,li,d = self.ReadText( d )
+			tot_length += le
+			print("len=",le,"=>",li)
+		print("Total length = ", tot_length, "0x0d = ",self.ods)
+	
 	def Half( self, d ):
 		formoffset, d = self.apply_struct( type(self).half_block, d )
 		print("Def offset=",formoffset," is really ",formoffset+10)
@@ -287,7 +298,13 @@ class Parser:
 		elif blocktype == 0x01:
 			if self.data[-1][0] != 0x81:
 				print("Bad Continuation")
-			print("Block number ",self.blocknum,"\t","Form Data continuation")
+		elif blocktype == 0x84:
+			print("Block number ",self.blocknum,"\t","Program")
+			self.data.append( [blocktype, blockdata] )
+		elif blocktype == 0x04:
+			if self.data[-1][0] != 0x84:
+				print("Bad Continuation")
+			print("Block number ",self.blocknum,"\t","Program continuation")
 			self.data[-1][1] += blockdata
 		elif blocktype == 0x00:
 			print("Block number ",self.blocknum,"\t","Empty record")
@@ -310,6 +327,10 @@ class Parser:
 			self.Form(d)
 		elif t == 0x81:
 			print("Form data")
+			hexdump(d)
+			self.Data(d)
+		elif t == 0x84:
+			print("Program")
 			hexdump(d)
 			self.Data(d)
 		elif t == 0x00:
