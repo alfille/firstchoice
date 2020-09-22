@@ -9,6 +9,37 @@ Paul H Alfille 2020
 
 ![Screenshot](FirstChoice.png)
 
+- [First Choice Convertor](#first-choice-convertor)
+  * [Author](#author)
+  * [First Choice](#first-choice)
+  * [History](#history)
+    + [Why First Choice](#why-first-choice)
+    + [Data Extraction](#data-extraction)
+    + [Current Approach](#current-approach)
+    + [Design](#design)
+  * [Alternatives](#alternatives)
+  * [License](#license)
+  * [Details](#details)
+    + [Size](#size)
+    + [Numbers](#numbers)
+    + ["Magic" File ID](#-magic--file-id)
+    + [Record types](#record-types)
+    + [Header](#header)
+    + [Form Description Record](#form-description-record)
+      - [Screen Layout](#screen-layout)
+      - [Form Field](#form-field)
+      - [Background Text Encoding](#background-text-encoding)
+      - [Field Name Encoding](#field-name-encoding)
+    + [Data Record](#data-record)
+      - [Data Field](#data-field)
+    + [Table View](#table-view)
+      - [Field width](#field-width)
+    + [Program Record](#program-record)
+      - [Progral line](#progral-line)
+    + [Deleted Record / Empty Block](#deleted-record---empty-block)
+    + [Continuation Record](#continuation-record)
+
+
 ## History
 ### Why First Choice
 I found First Choice a great solution for indexing collections for myself and my wife, back in the early DOS days. Although Windows and other developements left that program behind, the program still functions, especially in DOSBOX. I run it on Windows, Linux, Mac and even a Chromebook.
@@ -56,6 +87,17 @@ Numbers are generally 2-byte little endian unsigned integers. Big Endian is used
 * Form description (+ continuations)
 * Data record (+ continuations)
 
+| Pos | Size |Value|Description| 
+|----:|-----:|:---|:-----------|
+|0|2|0x81|Data record|
+|0|2|0x01|Data continuation|
+|0|2|0x82|Form Description View|
+|0|2|0x02|Form Description continuation|
+|0|2|0x83|Table View|
+|0|2|0x03|Table View continuation|
+|0|2|0x84|Formula|
+|0|2|0x04|Formula continuation|
+
 ### Header
 Always first block (block 0)
 
@@ -74,7 +116,9 @@ Always first block (block 0)
 |32|2|int|more4|
 |34|2|int|more5|
 |36|2|int|more6|
-|38|7|chars|Seems fixed as '0xff 0xff 0x00 0x00 0x02 0x00 0x08'|
+|38|2|int|Block number of program record|
+|40|1|byte|size of next field (8 byte minimum)||
+|41||chars|@DISKVAR value for formulas|
 
 
 ### Form Description Record
@@ -153,6 +197,38 @@ A 0x0d is added to end if next field in on another line
 
 Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
 
+### Table View
+| Pos | Size |Type| Description |
+|----:|-----:|:---|:------------|
+|0|2|int|0x83 Data record start|
+|2|2|int|total blocks (this + continuations)|
+
+#### Field width
+A 0x0d is added to end if next field in on another line
+
+| Size |Type| Description |
+|-----:|:---|:------------|
+|2|int-BE|Field size (in bytes)|
+|1X|chars|Text -- straight ascii -- numeric width|
+|1|char|0x0d **counts for 2 bytes** |
+
+### Program Record
+| Pos | Size |Type| Description |
+|----:|-----:|:---|:------------|
+|0|2|int|0x84 Data record start|
+|2|2|int|total blocks (this + continuations)|
+
+#### Progral line
+A 0x0d is added to end if next field in on another line
+
+| Size |Type| Description |
+|-----:|:---|:------------|
+|2|int-BE|Field size (in bytes)|
+|1X|chars|Text -- straight ascii|
+|1|char|0x0d **counts for 2 bytes** |
+
+Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
+
 ### Deleted Record / Empty Block
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
@@ -164,5 +240,6 @@ Data entry length cannot extend past location of next field on screen. (I.e. lon
 |----:|-----:|:---|:------------|
 |0|2|int|0x01 Data continuation|
 |0|2|int|0x02 Form continuation|
+|0|2|int|0x04 Program continuation|
 |2|126|data|continuation of prior block payload|
 
