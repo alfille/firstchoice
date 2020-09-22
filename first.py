@@ -27,10 +27,9 @@ def validate( dbase ):
 
 class Parser:
 	# database header
-	header_format = '<4H14s7H5s'
+	header_format = '<4H14s9HB'
 	nonheader_format = "<H126s"
 	gerb = b'\x0cGERBILDB3   \x00'
-	more_head = b'x00\x00\x02\x00\x08'
 	form_format = '>BxHH'
 	form_data_block = '<H'
 	half_block = '<H'
@@ -109,10 +108,7 @@ class Parser:
 		self.formlength = data[6]
 		self.revisions = data[7]
 		self.programstart = data[11]
-		if type(self).more_head != data[12]:
-			print("Rest of header doesn't match")
-		if not self.all_zeros(data[13]):
-			print("Header block unzeroed")
+		print(data[15][:data[14]])
 
 	def hexbyte( self ):
 		if self.byte0 is None:
@@ -249,11 +245,21 @@ class Parser:
 			print("len=",le,"=>",li)
 		print("Total length = ", tot_length, "0x0d = ",self.ods)
 	
-	def Program( self, d ):
+	def Table( self, d ):
 		formblocks, d = self.apply_struct( type(self).form_data_block, d )
 		tot_length = 0
 		self.ods = 0
 		for i in range( self.fields ):
+			le,li,d = self.ReadText( d )
+			tot_length += le
+			print("len=",le,"=>",li)
+		print("Total length = ", tot_length, "0x0d = ",self.ods)
+	
+	def Program( self, d ):
+		formblocks, d = self.apply_struct( type(self).form_data_block, d )
+		tot_length = 0
+		self.ods = 0
+		for i in range( 1 ):
 			le,li,d = self.ReadText( d )
 			tot_length += le
 			print("len=",le,"=>",li)
@@ -306,6 +312,14 @@ class Parser:
 				print("Bad Continuation")
 			print("Block number ",self.blocknum,"\t","Program continuation")
 			self.data[-1][1] += blockdata
+		elif blocktype == 0x83:
+			print("Block number ",self.blocknum,"\t","Table View")
+			self.data.append( [blocktype, blockdata] )
+		elif blocktype == 0x03:
+			if self.data[-1][0] != 0x83:
+				print("Bad Continuation")
+			print("Block number ",self.blocknum,"\t","Table View continuation")
+			self.data[-1][1] += blockdata
 		elif blocktype == 0x00:
 			print("Block number ",self.blocknum,"\t","Empty record")
 			self.data.append( [blocktype, blockdata] )
@@ -332,7 +346,11 @@ class Parser:
 		elif t == 0x84:
 			print("Program")
 			hexdump(d)
-			self.Data(d)
+			self.Program(d)
+		elif t == 0x83:
+			print("Table View")
+			hexdump(d)
+			self.Table(d)
 		elif t == 0x00:
 			if not self.all_zeros(d):
 				print("Unexpected entries")
