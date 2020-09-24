@@ -15,6 +15,11 @@ def hexdump(block):
       sys.stdout.write('%02x ' % byte )
     sys.stdout.write('\n')
 
+def ehexdump(block):
+    global errlog
+    for byte in block:
+        errlog +='\"{:02x}\",'.format(byte)
+
 @click.command()
 @click.argument('dbase',type=click.File('rb'))
 def validate( dbase ):
@@ -23,7 +28,10 @@ def validate( dbase ):
 	*.fol
 	"""
 
+	global errlog
+	errlog = '\"'+sys.argv[-1]+'\",'
 	Parser(dbase)
+	sys.stderr.write(errlog+"\n")
 
 class Parser:
 	# database header
@@ -107,6 +115,8 @@ class Parser:
 		self.fields = int(data[5])
 		self.formlength = data[6]
 		self.revisions = data[7]
+		global errlog
+		errlog += "{},{},{},".format(self.fields,self.formlength,self.revisions)
 		self.programstart = data[11]
 		print(data[15][:data[14]])
 
@@ -278,6 +288,7 @@ class Parser:
 		tot_length = 0
 		self.ods = 0
 		self.chars = 0
+		dd = d[:]
 		for i in range( self.fields ):
 			le,li,d = self.ReadText( d )
 			tot_length += le
@@ -287,6 +298,9 @@ class Parser:
 			print("Formlength in header doesn't match computed");
 		if xformlength != tot_length + formlines + 1:
 			print("xFormlength in record doesn't match computed");
+		global errlog
+		errlog += "{},{},{},".format(xformlength,formlines,tot_length)
+		ehexdump(dd[self.formlength:tot_length])
 
 	def Block2Memory( self ):
 		blocktype, blockdata = ( struct.unpack( type(self).nonheader_format, self.block ) )
@@ -304,6 +318,7 @@ class Parser:
 		elif blocktype == 0x01:
 			if self.data[-1][0] != 0x81:
 				print("Bad Continuation")
+			self.data[-1][1] += blockdata
 		elif blocktype == 0x84:
 			print("Block number ",self.blocknum,"\t","Program")
 			self.data.append( [blocktype, blockdata] )
