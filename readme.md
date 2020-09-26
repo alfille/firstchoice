@@ -82,7 +82,7 @@ Numbers are generally 2-byte little endian unsigned integers. Big Endian is used
 
 ### Record types
 * Header
-* "Half Header" (Optional record 4)
+* "Empties list" (Always Record 4 = 5th block)
 * Empty
 * Form description (+ continuations)
 * Data record (+ continuations)
@@ -112,7 +112,7 @@ Always first block (block 0)
 |24|2|int|Form length in chars? |
 |26|2|int|Form revisions (starts at 1)|
 |28|2|int|more2|
-|30|2|int|more3|
+|30|2|int|entries in empties list|
 |32|2|int|more4|
 |34|2|int|more5|
 |36|2|int|more6|
@@ -120,6 +120,14 @@ Always first block (block 0)
 |40|1|byte|size of next field (8 byte minimum)||
 |41||chars|@DISKVAR value for formulas|
 
+### Empties list
+Always 5th block (block 4)
+
+* List of paired numbers (can go on for several records)
+
+| Location | Size |
+|----:|-----:|
+|Int (2byte) block number -1|Int number of blocks|
 
 ### Form Description Record
 note that "int-BE" is Big Endian integer
