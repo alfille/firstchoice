@@ -112,11 +112,11 @@ Always first block (block 0)
 |24|2|int|Form length in chars? |
 |26|2|int|Form revisions (starts at 1)|
 |28|2|int|more2|
-|30|2|int|entries in empties list|
-|32|2|int|more4|
-|34|2|int|more5|
-|36|2|int|more6|
-|38|2|int|Block number of program record|
+|30|2|int|entries in empties list, 0 for none|
+|32|2|int|Table View location (block-1), 0xFFFF for none|
+|34|2|int|Block number of program record (block-1)|
+|36|2|int|more 6|
+|38|2|int|more 7|
 |40|1|byte|size of next field (8 byte minimum)||
 |41||chars|@DISKVAR value for formulas|
 
@@ -124,6 +124,8 @@ Always first block (block 0)
 Always 5th block (block 4)
 
 * List of paired numbers (can go on for several records)
+* Number of pairs in Header field
+* Some extra repeated pairs can persist
 
 | Location | Size |
 |----:|-----:|
