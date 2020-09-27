@@ -417,6 +417,61 @@ class Parser:
         else:
             print("Unknown")
             hexdump(d)
+            
+class CreateDatabase:
+    def Fixup( self, blocktype, data ):
+        # Add block types, continuations, and return
+        # blocks, data
+        # zero filled to 128 size
+        
+        length = len( data )
+        blocks = 1
+        working = bytearray(b'XX')
+        while True:
+            print(length)
+            if length >= 126:
+                working += data[:126]
+                data = data[126:]
+                length -= 126
+                if length != 0:
+                    working += b"XX"
+                    blocks += 1
+            else:
+                working += data
+                zpad = (128 - (len(working) % 128)) % 128
+                working += b'\x00' * zpad
+                break
+        
+        # Add continuations (and overwrite primary blocktype at end)
+        for b in range(blocks):
+            struct.pack_into( "<H", working, 128*b, blocktype & 0x7F )
+        struct.pack_into( "<H", working, 0, blocktype )
+        
+        return blocks, working
+            
+    
+    def DataRecord( self, field_values ):
+        # return blocks and record bytearray
+        ba = bytearray(b'')
+        for f in field_values:
+            print(f)
+            ba += self.WriteDataField(f)
+        return self.Fixup( 0x81, ba )
+        
+        
+    def WriteDataField( self, string ):
+        # returns bytearray
+        ba = bytearray(b'XX')
+        cr = 0
+        for b in string:
+            ba.append(b)
+            if b == 0x0d:
+                cr += 1
+        struct.pack_into('>H',ba,0,len(string)+cr)
+        return ba
+        
+    def Test( self ):
+        hexdump( self.DataRecord( [b'hello\r', b'more    ',b'123'])[1] )
 
 def signal_handler( signal, frame ):
     # Signal handler
@@ -428,4 +483,5 @@ if __name__ == '__main__':
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
     # Start program
+    CreateDatabase().Test()
     sys.exit(validate())
