@@ -23,12 +23,6 @@ def hexdump(block):
         
     sys.stdout.write('\n')
 
-
-def ehexdump(block):
-    global errlog
-    for byte in block:
-        errlog +='\"{:02x}\",'.format(byte)
-
 @click.command()
 @click.argument('dbase',type=click.File('rb'))
 def validate( dbase ):
@@ -36,28 +30,23 @@ def validate( dbase ):
     First Choice Database File
     *.fol
     """
+    d = Database(dbase)
+    
 
-    global errlog
-    errlog = '\"'+sys.argv[-1]+'\",'
-    Parser(dbase)
-    sys.stderr.write(errlog+"\n")
-
-class Parser:
+class Database:
     # database header
     header_format = '<4H14s9HB'
     nonheader_format = "<H126s"
     gerb = b'\x0cGERBILDB3   \x00'
-    form_format = '>BxHH'
-    form_data_block = '<H'
-    half_block = '<H'
-    form_field = '>H'
     
     def __init__(self,dbase):
         self.dbase = dbase
+        self.filename = sys.argv[-1]
         self.blocknum = 0
-        self.data = [[0,""]]
-        self.textstring = ""
-        self.fieldstring = ""
+        self.data = []
+        self.blocks = [[0,""]]
+        self.program = None
+        self.view = None
         
         self.header = b""
         for n in range(4):
@@ -82,12 +71,12 @@ class Parser:
             if self.Block2Memory() != 0x00:
                 usedblocks = allocatedblocks
                 
-        if allocatedblocks != self.allocatedblocks:
+        if allocatedblocks != self.header['allocatedblocks']:
             print("Allocated blocks count is off")
-        if usedblocks != self.usedblocks:
+        if usedblocks != self.header['usedblocks']:
             print("Used blocks count is off")
         
-        for [t,d] in self.data:
+        for [t,d] in self.blocks:
             self.ParseRecord( t,d )
             
     def apply_struct( self, structure, string ):
@@ -122,26 +111,32 @@ class Parser:
         return True
     
     def Header( self ):
-        hexdump(self.header)
+        #hexdump(self.header)
         data = self.apply_struct( type(self).header_format, self.header )
-        print(data)
-        self.fieldnameblock = data[0]
-        self.usedblocks = data[1]
-        self.allocatedblocks = data[2]
-        self.records = data[3]
-        if self.usedblocks != self.allocatedblocks:
+        #print(data)
+        self.header = {
+            'formdef'        : data[ 0],
+            'usedblocks'     : data[ 1],
+            'allocatedblocks': data[ 2],
+            'records'        : data[ 3],
+            'gerb'           : data[ 4],
+            'fields'         : data[ 5],
+            'formlength'     : data[ 6],
+            'formrevisions'  : data[ 7],
+            'unknown1'       : data[ 8],
+            'emptieslist'    : data[ 9],
+            'tableview'      : data[10],
+            'program'        : data[11],
+            'unknown2'       : data[12],
+            'unknown3'       : data[13],
+            'diskvarlen'     : data[14],
+            'diskvar'        : data[15][:data[14]],
+            }
+        print( self.header )
+        if self.header['usedblocks'] != self.header['allocatedblocks']:
             print("Blocks don't match")
         if type(self).gerb != data[4]:
             print("GERB doesn't match")
-        self.fields = int(data[5])
-        self.formlength = data[6]
-        self.revisions = data[7]
-        global errlog
-        errlog += "{},{},{},".format(self.fields,self.formlength,self.revisions)
-        self.empties = data[9]
-        self.tableview = data[10]
-        self.programstart = data[11]
-        print(data[15][:data[14]])
 
     def HalfHeader( self ):
         print("Half Header")
@@ -177,48 +172,33 @@ class Parser:
         self.byte0 = None
         self.byte1 = None
             
-    def TextString( self ):
-        if self.textstring == "":
-            return ""
-        f = "{"+self.textstring+"}"
-        if len(self.textstring) > 1:
-            f += "["+'{:04x}'.format(len(self.textstring))+"]"
-        self.textstring = ""
-        return f
-    
     def FieldLetter( self ):
         if self.byte0 == 0x80:
             # generic field
             self.fieldstring += " "
         elif self.byte0 == 0x81:
             # generic field
-            self.fieldstring += ": "
+            self.fieldtype = " "
         elif self.byte0 == 0x82:
             # numeric field
-            self.fieldstring += ":N"
+            self.fieldtype = "N"
         elif self.byte0 == 0x83:
             # date field
-            self.fieldstring += ":D"
+            self.fieldtype = "D"
         elif self.byte0 == 0x84:
             # time field
-            self.fieldstring += ":T"
+            self.fieldtype = "T"
         elif self.byte0 == 0x85:
             # yes-no field
-            self.fieldstring += ":Y"
+            self.fieldtype = "Y"
         else:
             self.fieldstring += '{:c}'.format(self.byte0 & 0x7F)
         self.byte0 = None
             
-    def FieldString( self ):
-        if self.fieldstring == "":
-            return ""
-        f = "<"+self.fieldstring+">"
-        self.fieldstring = ""
-        return f
-    
     def ReadRichText( self,byte ):
         if byte is None:
-            return self.FieldString()+self.TextString()+self.hexbyte() + self.hexbyte()
+            self.textstring += self.hexbyte() + self.hexbyte()
+            return
             
 #        if self.byte0 is not None:
 #            print('Stack {:02X} {:02X} {:02X}'.format(self.byte0, self.byte1, byte) )
@@ -256,7 +236,7 @@ class Parser:
             # Background text
             self.TextLetter()
             self.chars -= 2
-            return self.FieldString()
+            return
 
         if byte == 0x90:
             font = 'normal'
@@ -270,128 +250,134 @@ class Parser:
             font = None
         if font is not None and self.byte1 is not None:
             # Field name
-            s = self.TextString() + self.hexbyte()
+            self.textstring += self.hexbyte() # clear out old
             self.chars -= 1
             self.FieldLetter()
-            return s
+            return
             
-        s = self.hexbyte()
+        self.textstring += self.hexbyte()
         self.byte1 = byte
-        if s != "":
-            return self.FieldString()+self.TextString()+s
-        else:
-            return ""
+        return
     
     def Data( self, d ):
-        formblocks, d = self.apply_struct( type(self).form_data_block, d )
+        formblocks, d = self.apply_struct( '<H', d )
         tot_length = 0
         self.ods = 0
-        for i in range( self.fields ):
+        self.data.append([])
+        for i in range( self.header['fields'] ):
             le,li,d = self.ReadText( d )
+            self.data[-1].append(li)
             tot_length += le
-            print("len=",le,"=>",li)
+            
+            #print("len=",le,"=>",li)
+        print(self.data[-1])
         print("Total length = ", tot_length, "0x0d = ",self.ods)
     
     def Table( self, d ):
-        formblocks, d = self.apply_struct( type(self).form_data_block, d )
+        formblocks, d = self.apply_struct( '<H', d )
         tot_length = 0
         self.ods = 0
-        for i in range( self.fields ):
+        self.view = []
+        for i in range( self.header['fields'] ):
             le,li,d = self.ReadText( d )
+            self.view.append(li)
             tot_length += le
             print("len=",le,"=>",li)
         print("Total length = ", tot_length, "0x0d = ",self.ods)
     
     def Program( self, d ):
-        formblocks, d = self.apply_struct( type(self).form_data_block, d )
+        formblocks, d = self.apply_struct( '<H', d )
         tot_length = 0
         self.ods = 0
         for i in range( 1 ):
             le,li,d = self.ReadText( d )
+            self.program = li
             tot_length += le
-            print("len=",le,"=>",li)
+            #print("len=",le,"=>",li)
         print("Total length = ", tot_length, "0x0d = ",self.ods)
     
-    def Half( self, d ):
-        formoffset, d = self.apply_struct( type(self).half_block, d )
-        print("Def offset=",formoffset," is really ",formoffset+10)
-        if not self.all_zeros(d):
-            print("More half data")
-            hexdump(d)
-    
     def Form( self,d ):
-        formblocks, xformlength, formlines, d = self.apply_struct( type(self).form_format, d )
-        print("Formblocks=",formblocks,"xFormlength=",xformlength,"formlines=",formlines)
+        self.form = {
+        'fulldef' : d,
+        }
+        formblocks, d = self.apply_struct( '<H', d )
+        self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
+        
+        print("Formblocks=",formblocks,"xFormlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
         self.ods = 0
         self.chars = 0
         dd = d[:]
-        for i in range( self.fields ):
+        self.form['fields'] = []
+        for i in range( self.header['fields'] ):
+            self.textstring = ""
+            self.fieldstring = ""
+            self.fieldtype = " "
             le,li,d = self.ReadText( d )
+            for b in li:
+                self.ReadRichText(b)
+            self.ReadRichText(None)
             tot_length += le
-            print( '[{}]'.format(le)+''.join(self.ReadRichText(b) for b in li)+self.ReadRichText(None) )
+            self.form['fields'].append({'text':self.textstring,'field':self.fieldstring,'type':self.fieldtype})
         print("Total length = ", tot_length, "0x0d = ",self.ods, " chars = ",self.chars)
-        if tot_length != self.fields + self.formlength - 1:
-            print("Formlength in header doesn't match computed");
-        if xformlength != tot_length + formlines + 1:
-            print("xFormlength in record doesn't match computed");
-        global errlog
-        errlog += "{},{},{},{},{},".format(xformlength,formlines,tot_length,self.ods,self.formlength-tot_length)
-        if self.formlength != tot_length:
-            ehexdump(dd[self.formlength-tot_length:])
+        print(self.form['fields'])
+        #if tot_length != self.header['fields'] + self.header['formlength'] - 1:
+        #    print("Formlength in header doesn't match computed");
+        if self.form['length'] != tot_length + self.form['lines'] + 1:
+            print("Form.length in record doesn't match computed");
 
     def Block2Memory( self ):
         blocktype, blockdata = ( struct.unpack( type(self).nonheader_format, self.block ) )
         if blocktype == 0x82:
             print("Block number ",self.blocknum,"\t","Form definition")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         elif blocktype == 0x02:
-            if self.data[-1][0] != 0x82:
+            if self.blocks[-1][0] != 0x82:
                 print("Bad Continuation")
             print("Block number ",self.blocknum,"\t","Form definition continuation")
-            self.data[-1][1] += blockdata
+            self.blocks[-1][1] += blockdata
         elif blocktype == 0x81:
             print("Block number ",self.blocknum,"\t","Form Data")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         elif blocktype == 0x01:
-            if self.data[-1][0] != 0x81:
+            if self.blocks[-1][0] != 0x81:
                 print("Bad Continuation")
-            self.data[-1][1] += blockdata
+            self.blocks[-1][1] += blockdata
         elif blocktype == 0x84:
             print("Block number ",self.blocknum,"\t","Program")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         elif blocktype == 0x04:
-            if self.data[-1][0] != 0x84:
+            if self.blocks[-1][0] != 0x84:
                 print("Bad Continuation")
             print("Block number ",self.blocknum,"\t","Program continuation")
-            self.data[-1][1] += blockdata
+            self.blocks[-1][1] += blockdata
         elif blocktype == 0x83:
             print("Block number ",self.blocknum,"\t","Table View")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         elif blocktype == 0x03:
-            if self.data[-1][0] != 0x83:
+            if self.blocks[-1][0] != 0x83:
                 print("Bad Continuation")
             print("Block number ",self.blocknum,"\t","Table View continuation")
-            self.data[-1][1] += blockdata
+            self.blocks[-1][1] += blockdata
         elif blocktype == 0x00:
             print("Block number ",self.blocknum,"\t","Empty record")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         elif blocktype == 0x0c:
             print("Block number ",self.blocknum,"\t","Delete log")
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         else:
             print("Block number ",self.blocknum,"\t","Unknown type {:02x}".format(blocktype))
-            self.data.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata] )
         return blocktype
 
     def ParseRecord( self, t, d ):
         if t == 0x82:
             print("Form definition")
-            hexdump(d)
+            #hexdump(d)
             self.Form(d)
         elif t == 0x81:
             print("Form data")
-            hexdump(d)
+            #hexdump(d)
             self.Data(d)
         elif t == 0x84:
             print("Program")
@@ -405,17 +391,11 @@ class Parser:
             if not self.all_zeros(d):
                 print("Unexpected entries")
                 hexdump(d)
-        elif t == 0x08:
-            print("Half 08")
-            self.Half(d)
-        elif t == 0x09:
-            print("Other Half 09")
-            self.Half(d)
         elif t == 0x0c:
             print("Delete log")
             hexdump(d)
         else:
-            print("Unknown")
+            print("Unknown = {:02X}".format(t))
             hexdump(d)
             
 class CreateDatabase:
@@ -471,7 +451,7 @@ class CreateDatabase:
         return ba
         
     def Test( self ):
-        hexdump( self.DataRecord( [b'hello\r', b'more    ',b'123'])[1] )
+        hexdump( self.blocksRecord( [b'hello\r', b'more    ',b'123'])[1] )
 
 def signal_handler( signal, frame ):
     # Signal handler
@@ -483,5 +463,5 @@ if __name__ == '__main__':
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
     # Start program
-    CreateDatabase().Test()
+    #CreateDatabase().Test()
     sys.exit(validate())
