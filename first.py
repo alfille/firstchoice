@@ -127,8 +127,8 @@ class Database:
             'emptieslist'    : data[ 9],
             'tableview'      : data[10],
             'program'        : data[11],
-            'unknown2'       : data[12],
-            'unknown3'       : data[13],
+            'proglines'      : data[12],
+            'diskvartype'    : data[13],
             'diskvarlen'     : data[14],
             'diskvar'        : data[15][:data[14]],
             }
@@ -303,7 +303,7 @@ class Database:
         formblocks, d = self.apply_struct( '<H', d )
         self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
         
-        print("Formblocks=",formblocks,"xFormlength=",self.form['length'],"formlines=",self.form['lines'])
+        print("Formblocks=",formblocks,"Formlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
         self.ods = 0
         self.chars = 0
@@ -399,6 +399,15 @@ class Database:
             hexdump(d)
             
 class CreateDatabase:
+    
+    def __init__(self, database):
+        self.database = database
+        
+    def FormDefinition( self ):
+        return Fixup( self.database.form['fulldef'] )
+        
+    
+    
     def Fixup( self, blocktype, data ):
         # Add block types, continuations, and return
         # blocks, data
@@ -428,7 +437,11 @@ class CreateDatabase:
         struct.pack_into( "<H", working, 0, blocktype )
         
         return blocks, working
-            
+        
+    def EmptyBlock( self ):
+        return bytearray(b'\x00' * 128 )
+        
+    
     
     def DataRecord( self, field_values ):
         # return blocks and record bytearray
