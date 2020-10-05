@@ -203,6 +203,9 @@ A 0x0d is added to end if next field in on another line
 |-----:|:---|:------------|
 |2|int-BE|Field size (in bytes)|
 |1X|chars|Text -- straight ascii|
+|2X|chars|2 byte extended char|
+| 1|byte| ascii | 0x80 (high bit set)|
+| 1|byte| format byte e.g. 0x82 for **bold**|
 |1|char|0x0d **counts for 2 bytes** |
 
 Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
