@@ -5,12 +5,20 @@
 import sys
 import struct
 import signal
+import argparse # for parsing the command line
 
-import click
 
 BLOCKSIZE = 128
 
-def hexdump(block):
+
+def hexdump( block ):
+    if ( len(block) <= 128 ):
+        hexdumpall(block)
+        return
+    hexdumpall( block[:128] )
+    hexdump( block[128:] )
+
+def hexdumpall(block):
     length = len(block)
     trail = 0
     while length > 0 and block[length-1] == 0x00:
@@ -23,17 +31,363 @@ def hexdump(block):
         
     sys.stdout.write('\n')
 
-@click.command()
-@click.argument('dbase',type=click.File('rb'))
-def validate( dbase ):
-    """
-    First Choice Database File
-    *.fol
-    """
-    d = Database(dbase)
+class HtmlState:
+    next_tag = None
+        
+    @classmethod
+    def Set( cls, hs, state ):
+        if state == 0:
+            cls.Off(hs)
+        else:
+            cls.On(hs)
     
+    @classmethod
+    def On( cls, hs ):
+        if not hs.state( cls ):
+            # need to change state
+            #    turn off lower temporarily
+            if cls.next_tag is not None:
+                cls.next_tag.Pause(hs)
+            #    change state
+            hs.append( "<"+cls.tag+">" )
+            hs.On( cls )
+            #    restore lower
+            if cls.next_tag is not None:
+                cls.next_tag.Resume(hs)
+    
+    @classmethod
+    def Off( cls, hs ):
+        if hs.state( cls ):
+            # need to change state
+            #    turn off lower temporarily
+            if cls.next_tag is not None:
+                cls.next_tag.Pause(hs)
+            #    change state
+            hs.append("</"+cls.tag+">")
+            hs.Off( cls )
+            #    restore lower
+            if cls.next_tag is not None:
+                cls.next_tag.Resume(hs)
+        
+    @classmethod
+    def Pause( cls, hs ):
+        # first pause lower
+        if cls.next_tag is not None:
+            cls.next_tag.Pause( hs )
+        # now pause me
+        if hs.state( cls ):
+            hs.append("</"+cls.tag+">")
+            
+    @classmethod
+    def Resume( cls, hs ):
+        # restore my state
+        if hs.state( cls ):
+            hs.append( "<"+cls.tag+">" )
+        # restore all lower states
+        if cls.next_tag is not None:
+            cls.next_tag.Resume( hs )
+            
+class Sub(HtmlState):
+    tag = 'sub'
+    next_tag = None
 
-class Database:
+class Sup(HtmlState):
+    tag = 'sup'
+    next_tag = Sub
+
+class Underline(HtmlState):
+    tag = 'u'
+    next_tag = Sup
+
+class Italic(HtmlState):
+    tag = 'i'
+    next_tag = Underline
+
+class Bold(HtmlState):
+    tag = 'b'
+    next_tag = Italic
+    
+class Close(HtmlState):
+    # Wierd class to cleaup up states
+    next_tag = Bold
+    
+    @classmethod
+    def All( cls, hs ):
+        if cls.next_tag is not None:
+            # temporarily set states off
+            cls.next_tag.Pause( hs )
+            # make permenant
+            hs.reset()
+
+class HtmlString:
+    def __init__( self ):
+        self._string = bytearray(b'')
+        self.reset()
+        
+    def reset( self ):
+        # turn html states off
+        self._state = {
+            Bold:      False,
+            Italic:    False,
+            Underline: False,
+            Sup:       False, 
+            Sub:       False,
+        }
+        
+    @property
+    def string( self ):
+        return self._string
+        
+    @string.setter
+    def string( self, s ):
+        self._string = s
+    
+    def state( self, cls ):
+        return self._state[ cls ]
+        
+    def On( self, cls ):
+        self._state[ cls ] = True
+        
+    def Off( self, cls ):
+        self._state[ cls ] = False
+        
+    def append( self, s ):
+        if isinstance(s,bytes):
+            self._string+=s
+        elif isinstance(s,str):
+            self._string+=s.encode('utf-8')
+        else:
+            self._string.append(s)
+        
+class TextField:
+    # Convert First-choice style text to plain text and HTML
+    # First choice uses a unique encoding
+    html_esc = {
+        ord('<') : '&lt;',
+        ord('>') : '&gt;',
+        ord('&') : '&amp;',
+        ord(' ') : '&nbsp;',
+    }
+    
+    def __init__( self, string ):
+        
+        self.parsed = None
+        
+        _text = ''
+        _ftext = ''
+        _html = HtmlString()
+        _fhtml = HtmlString()
+        _fieldtype = ' '
+        
+        try:
+            _length = struct.unpack_from('>H',string)[0]
+            raw = string[2:]
+        except:
+            print("Bad string input")
+            raw = None
+            return
+            
+        #print('raw',len(raw),raw)
+        #hexdump(raw)
+        length_count = 0
+        array_count = 0
+        while length_count < _length:
+            #print(_length,array_count,length_count)
+            c = raw[array_count]
+            array_count += 1
+            length_count += 1
+            if c < 0x80:
+                Close.All(_html)
+                Close.All(_fhtml)
+                if c == 0x0d:
+                    _text += "\n"                
+                    _html.append('<br />')
+                    length_count += 1
+                elif c in type(self).html_esc :
+                    _text += chr(c)
+                    _html.append(type(self).html_esc[c])
+                else:
+                    _text += chr(c)
+                    _html.append(c)
+            else: # C >= 0x80
+                c &= 0x7F # peel off first bit
+                d = raw[array_count]
+                # Background or field
+                array_count += 1
+                length_count += 1
+
+                if d >= 0xd0 and d <= 0xdf:
+                    # background text or field
+                    # needs 3rd byte
+                    e = raw[array_count]
+                    array_count += 1
+                    length_count += 1
+                    
+                    if e & 0x01 == 1:
+                        # background
+                        Bold.Set(_html, d & 0x02)
+                        Italic.Set(_html, d & 0x04)
+                        Underline.Set(_html, d & 0x01)
+                        Sup.Set(_html,e==0x85)
+                        Sub.Set(_html,e==0x83)
+
+
+                        if c == 0 :
+                            _text +=' '
+                            _html.append('&nbsp')
+                        elif c in type(self).html_esc :
+                            _text += chr(c)
+                            _html.append(type(self).html_esc[c])
+                        else:
+                            _text += chr(c)
+                            _html.append(c)
+                
+                    else: # e is even
+                        # field
+                        Close.All(_html)
+                        Bold.Set(_fhtml, d & 0x02)
+                        Italic.Set(_fhtml, d & 0x04)
+                        Underline.Set(_fhtml, d & 0x01)
+                        Sup.Set(_html,e==0x84)
+                        Sub.Set(_html,e==0x82)
+
+
+                        if c == 0 :
+                            _text +=' '
+                            _html.append('&nbsp')
+                        elif c in type(self).html_esc :
+                            _text += chr(c)
+                            _html.append(type(self).html_esc[c])
+                        else:
+                            _text += chr(c)
+                            _html.append(c)
+                
+                elif d >= 0x90 and d <= 0x9f:
+                    # Field Name
+                    Close.All(_html)
+                    Bold.Set(_fhtml, d & 0x02)
+                    Italic.Set(_fhtml, d & 0x04)
+                    Underline.Set(_fhtml, d & 0x01)
+                    
+                    if c == 0 :
+                        _ftext += ' '
+                        _fhtml.append('&nbsp')
+                    elif c == 1:
+                        _fieldtype = ' '
+                        Close.All(_fhtml)
+                    elif c == 2:
+                        _fieldtype = 'N'
+                        Close.All(_fhtml)
+                    elif c == 3:
+                        _fieldtype = 'D'
+                        Close.All(_fhtml)
+                    elif c == 4:
+                        _fieldtype = 'T'
+                        Close.All(_fhtml)
+                    elif c == 5:
+                        _fieldtype = 'Y'
+                        Close.All(_fhtml)
+                    elif c in type(self).html_esc :
+                        _ftext += chr(c)
+                        _fhtml.append(type(self).html_esc[c])
+                    else:
+                        _ftext += chr(c)
+                        _fhtml.append(c)
+        
+                elif d >= 0x81 and d <= 0x8f:
+                    # Regular text
+                    Bold.Set(_html, d & 0x02)
+                    Italic.Set(_html, d & 0x04)
+                    Underline.Set(_html, d & 0x01)
+                    
+                    if c == 0 :
+                        _text += ' '
+                        _html.append('&nbsp')
+                    elif c in type(self).html_esc :
+                        _text += chr(c)
+                        _html.append(type(self).html_esc[c])
+                    else:
+                        _text += chr(c)
+                        _html.append(c)
+        
+                elif d >= 0xc0 and d <= 0xcf:
+                    # regular text
+                    # needs 3rd byte
+                    e = raw[array_count]
+                    array_count += 1
+                    length_count += 1
+                    
+                    Bold.Set(_html, d & 0x02)
+                    Italic.Set(_html, d & 0x04)
+                    Underline.Set(_html, d & 0x01)
+                    Sup.Set(_html,e==0x84)
+                    Sub.Set(_html,e==0x82)
+
+
+                    if c == 0 :
+                        _text +=' '
+                        _html.append('&nbsp')
+                    elif c in type(self).html_esc :
+                        _text += chr(c)
+                        _html.append(type(self).html_esc[c])
+                    else:
+                        _text += chr(c)
+                        _html.append(c)
+                                
+        self.parsed = {
+            'text' : _text,
+            'html' : _html.string,
+            'ftext': _ftext,
+            'fhtml': _fhtml.string,
+            'fieldtype': _fieldtype,
+            'length': _length,
+            'rest': raw[array_count:]
+            }
+            
+            
+    @property
+    def text(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['text']
+            
+    @property
+    def ftext(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['ftext']
+            
+    @property
+    def html(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['html']
+            
+    @property
+    def fhtml(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['fhtml']
+            
+    @property
+    def fieldtype(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['fieldtype']
+            
+    @property
+    def length(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['length']
+                
+    @property
+    def rest(self):
+        if self.parsed is None:
+            return None
+        return self.parsed['rest']
+                
+class FOLfile_in:
     # database header
     header_format = '<4H14s9HB'
     nonheader_format = "<H126s"
@@ -41,28 +395,32 @@ class Database:
     
     def __init__(self,dbase):
         self.dbase = dbase
-        self.filename = sys.argv[-1]
+        self.filename = sys.argv[-2]
         self.blocknum = 0
         self.data = []
         self.blocks = [[0,""]]
-        self.program = None
-        self.view = None
+
+        self.fulldef={
+        'form':None,
+        'view':None,
+        'program':None,
+        }
         
-        self.header = b""
+        headdata = b""
         for n in range(4):
             if not self._read():
                 print("Cannot read full 4 block header")
                 return
-            self.header += self.block
-        self.Header()
+            headdata += self.block
+        self.ReadHeader(headdata)
             
-        self.halfheader = b""
+        halfheader = b""
         for n in range(4):
             if not self._read():
                 print("Cannot read full second 4 block header")
                 return
-            self.halfheader += self.block
-        self.HalfHeader()
+            halfheader += self.block
+        self.ReadEmpties(halfheader)
         
         allocatedblocks = 7
         usedblocks = 7
@@ -78,6 +436,9 @@ class Database:
         
         for [t,d] in self.blocks:
             self.ParseRecord( t,d )
+        
+        del(self.blocks)
+        self.dbase.close()
             
     def apply_struct( self, structure, string ):
         slen = struct.calcsize( structure )
@@ -89,18 +450,6 @@ class Database:
                 return False
         return True
         
-    def ReadText( self, string ):
-        l, d = self.apply_struct( '>H', string )
-        ll = 0
-        while ll < l:
-            # \r counts for 2
-            if d[ll] == 0x0d:
-                l -= 1
-                self.ods += 1
-            ll += 1 
-        #hexdump(string[:2])
-        return (l, d[:l], d[l:])     
-        
     def _read(self):
         self.block = self.dbase.read(BLOCKSIZE)
         self.byte0 = None
@@ -110,9 +459,9 @@ class Database:
         self.blocknum += 1
         return True
     
-    def Header( self ):
+    def ReadHeader( self, headdata ):
         #hexdump(self.header)
-        data = self.apply_struct( type(self).header_format, self.header )
+        data = self.apply_struct( type(self).header_format, headdata )
         #print(data)
         self.header = {
             'formdef'        : data[ 0],
@@ -125,7 +474,7 @@ class Database:
             'formrevisions'  : data[ 7],
             'unknown1'       : data[ 8],
             'emptieslist'    : data[ 9],
-            'tableview'      : data[10],
+            'view'           : data[10],
             'program'        : data[11],
             'proglines'      : data[12],
             'diskvartype'    : data[13],
@@ -133,15 +482,16 @@ class Database:
             'diskvar'        : data[15][:data[14]],
             }
         print( self.header )
+        self.header['fulldef'] = headdata
         if self.header['usedblocks'] != self.header['allocatedblocks']:
             print("Blocks don't match")
         if type(self).gerb != data[4]:
             print("GERB doesn't match")
 
-    def HalfHeader( self ):
-        print("Half Header")
-        hexdump(self.halfheader)
-        d = self.halfheader
+    def ReadEmpties( self, halfheader ):
+        print("Empties")
+        #hexdump(halfheader)
+        d = halfheader
         while True:
             try:
                 a,b,d = self.apply_struct( "<HH", d )
@@ -149,203 +499,74 @@ class Database:
                 break
             if a==0 and b == 0:
                 break
-            print('[{},{}]'.format(a,b),end="  ")
-        print('\n')
+            #print('[{},{}]'.format(a,b),end="  ")
+        #print('\n')
 
-    def hexbyte( self ):
-        if self.byte0 is None:
-            s = ""
-        elif self.byte0 == 0 :
-            s = "*"
-        else:
-            s = '{:02x}'.format(self.byte0)
-        self.byte0 = self.byte1
-        self.byte1 = None
-
-        return s
-        
-    def TextLetter( self ):
-        if self.byte0 == 0x80:
-            self.textstring += " "
-        else:
-            self.textstring += '{:c}'.format(self.byte0 & 0x7F)
-        self.byte0 = None
-        self.byte1 = None
-            
-    def FieldLetter( self ):
-        if self.byte0 == 0x80:
-            # generic field
-            self.fieldstring += " "
-        elif self.byte0 == 0x81:
-            # generic field
-            self.fieldtype = " "
-        elif self.byte0 == 0x82:
-            # numeric field
-            self.fieldtype = "N"
-        elif self.byte0 == 0x83:
-            # date field
-            self.fieldtype = "D"
-        elif self.byte0 == 0x84:
-            # time field
-            self.fieldtype = "T"
-        elif self.byte0 == 0x85:
-            # yes-no field
-            self.fieldtype = "Y"
-        else:
-            self.fieldstring += '{:c}'.format(self.byte0 & 0x7F)
-        self.byte0 = None
-            
-    def ReadRichText( self,byte ):
-        if byte is None:
-            self.textstring += self.hexbyte() + self.hexbyte()
-            return
-            
-#        if self.byte0 is not None:
-#            print('Stack {:02X} {:02X} {:02X}'.format(self.byte0, self.byte1, byte) )
-#        elif self.byte1 is not None:
-#            print('Stack    {:02X} {:02X}'.format(self.byte1, byte) )
-#        else:
-#            print('Stack       {:02X}'.format( byte) )
-
-        self.chars += 1 # All bytes, then substract 2 for background text and 1 for field name
-        if byte == 0x0d:
-            #purely informational
-            self.ods += 1
-
-        if byte == 0x81:
-            script = 'normal'
-        elif byte == 0x85:
-            script = 'super'
-        elif byte == 0x83:
-            script = 'sub'
-        else:
-            script = None
-            
-        if self.byte1 == 0xd0:
-            font = 'normal'
-        elif self.byte1 == 0xd2:
-            font = 'bold'
-        elif self.byte1 == 0xd1:
-            font = 'underline'
-        elif self.byte1 == 0xd4:
-            font = 'italic'
-        else:
-            font = None
-            
-        if script is not None and font is not None and self.byte0 is not None:
-            # Background text
-            self.TextLetter()
-            self.chars -= 2
-            return
-
-        if byte == 0x90:
-            font = 'normal'
-        elif byte == 0x92:
-            font = 'bold'
-        elif byte == 0x91:
-            font = 'underline'
-        elif byte == 0x94:
-            font = 'italic'
-        else:
-            font = None
-        if font is not None and self.byte1 is not None:
-            # Field name
-            self.textstring += self.hexbyte() # clear out old
-            self.chars -= 1
-            self.FieldLetter()
-            return
-            
-        self.textstring += self.hexbyte()
-        self.byte1 = byte
-        return
-    
-    def Data( self, d ):
-        formblocks, d = self.apply_struct( '<H', d )
-        tot_length = 0
-        self.ods = 0
+    def ReadData( self, d ):
         self.data.append([])
         for i in range( self.header['fields'] ):
-            le,li,d = self.ReadText( d )
-            self.data[-1].append(li)
-            tot_length += le
+            t = TextField(d)
+            d = t.rest
+            self.data[-1].append(t.text)
             
-            #print("len=",le,"=>",li)
         print(self.data[-1])
-        print("Total length = ", tot_length, "0x0d = ",self.ods)
     
-    def Table( self, d ):
-        formblocks, d = self.apply_struct( '<H', d )
-        tot_length = 0
-        self.ods = 0
+    def ReadView( self, d ):
         self.view = []
         for i in range( self.header['fields'] ):
-            le,li,d = self.ReadText( d )
-            self.view.append(li)
-            tot_length += le
-            print("len=",le,"=>",li)
-        print("Total length = ", tot_length, "0x0d = ",self.ods)
-    
-    def Program( self, d ):
-        formblocks, d = self.apply_struct( '<H', d )
-        tot_length = 0
-        self.ods = 0
-        for i in range( 1 ):
-            le,li,d = self.ReadText( d )
-            self.program = li
-            tot_length += le
+            t = TextField(d)
+            d = t.rest
+            self.view.append(t.text)
             #print("len=",le,"=>",li)
-        print("Total length = ", tot_length, "0x0d = ",self.ods)
+        #print("Total length = ", tot_length, "0x0d = ",self.ods)
     
-    def Form( self,d ):
-        self.form = {
-        'fulldef' : d,
-        }
-        formblocks, d = self.apply_struct( '<H', d )
+    def ReadProgram( self, d ):
+        for i in range( 1 ):
+            t = TextField(d)
+            d = t.rest
+            #print(t.text)
+            #print(t.html)
+    
+    def ReadForm( self,d ):
+        self.form={}
         self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
         
-        print("Formblocks=",formblocks,"Formlength=",self.form['length'],"formlines=",self.form['lines'])
+        print("Formlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
-        self.ods = 0
-        self.chars = 0
-        dd = d[:]
         self.form['fields'] = []
         for i in range( self.header['fields'] ):
-            self.textstring = ""
-            self.fieldstring = ""
-            self.fieldtype = " "
-            le,li,d = self.ReadText( d )
-            for b in li:
-                self.ReadRichText(b)
-            self.ReadRichText(None)
-            tot_length += le
-            self.form['fields'].append({'text':self.textstring,'field':self.fieldstring,'type':self.fieldtype})
-        print("Total length = ", tot_length, "0x0d = ",self.ods, " chars = ",self.chars)
-        print(self.form['fields'])
+            t = TextField(d)
+            d = t.rest
+            tot_length += t.length
+            self.form['fields'].append({'text':t.text,'field':t.ftext,'type':t.fieldtype})
+            print(t.ftext)
         #if tot_length != self.header['fields'] + self.header['formlength'] - 1:
         #    print("Formlength in header doesn't match computed");
         if self.form['length'] != tot_length + self.form['lines'] + 1:
             print("Form.length in record doesn't match computed");
 
     def Block2Memory( self ):
+        # Note:
+        #  will ignore block + continuation field (and not include)
         blocktype, blockdata = ( struct.unpack( type(self).nonheader_format, self.block ) )
         if blocktype == 0x82:
             print("Block number ",self.blocknum,"\t","Form definition")
-            self.blocks.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x02:
             if self.blocks[-1][0] != 0x82:
                 print("Bad Continuation")
             print("Block number ",self.blocknum,"\t","Form definition continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x81:
-            print("Block number ",self.blocknum,"\t","Form Data")
-            self.blocks.append( [blocktype, blockdata] )
+            print("Block number ",self.blocknum,"\t","Data record")
+            self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x01:
             if self.blocks[-1][0] != 0x81:
                 print("Bad Continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x84:
             print("Block number ",self.blocknum,"\t","Program")
-            self.blocks.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x04:
             if self.blocks[-1][0] != 0x84:
                 print("Bad Continuation")
@@ -353,7 +574,7 @@ class Database:
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x83:
             print("Block number ",self.blocknum,"\t","Table View")
-            self.blocks.append( [blocktype, blockdata] )
+            self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x03:
             if self.blocks[-1][0] != 0x83:
                 print("Bad Continuation")
@@ -361,9 +582,6 @@ class Database:
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x00:
             print("Block number ",self.blocknum,"\t","Empty record")
-            self.blocks.append( [blocktype, blockdata] )
-        elif blocktype == 0x0c:
-            print("Block number ",self.blocknum,"\t","Delete log")
             self.blocks.append( [blocktype, blockdata] )
         else:
             print("Block number ",self.blocknum,"\t","Unknown type {:02x}".format(blocktype))
@@ -374,107 +592,206 @@ class Database:
         if t == 0x82:
             print("Form definition")
             #hexdump(d)
-            self.Form(d)
+            self.fulldef['form'] = d
+            self.ReadForm(d)
         elif t == 0x81:
-            print("Form data")
+            print("Data")
             #hexdump(d)
-            self.Data(d)
+            self.ReadData(d)
         elif t == 0x84:
             print("Program")
-            hexdump(d)
-            self.Program(d)
+            #hexdump(d)
+            self.fulldef['program'] = d
+            self.ReadProgram(d)
         elif t == 0x83:
             print("Table View")
-            hexdump(d)
-            self.Table(d)
+            #hexdump(d)
+            self.fulldef['view'] = d
+            self.ReadView(d)
         elif t == 0x00:
             if not self.all_zeros(d):
                 print("Unexpected entries")
                 hexdump(d)
-        elif t == 0x0c:
-            print("Delete log")
-            hexdump(d)
         else:
             print("Unknown = {:02X}".format(t))
             hexdump(d)
             
-class CreateDatabase:
-    
-    def __init__(self, database):
+class RecordOut:
+    def __init__( self, database, fol_fileout ):
         self.database = database
+        self.fol_fileout = fol_fileout
         
-    def FormDefinition( self ):
-        return Fixup( self.database.form['fulldef'] )
-        
-    
-    
-    def Fixup( self, blocktype, data ):
+    def Split_Label_2_Blocks( self, data ):
         # Add block types, continuations, and return
         # blocks, data
         # zero filled to 128 size
         
         length = len( data )
+        bt = bytearray(b'XX')
+        
+        # First block
         blocks = 1
-        working = bytearray(b'XX')
-        while True:
-            print(length)
-            if length >= 126:
-                working += data[:126]
-                data = data[126:]
-                length -= 126
-                if length != 0:
-                    working += b"XX"
-                    blocks += 1
-            else:
-                working += data
-                zpad = (128 - (len(working) % 128)) % 128
-                working += b'\x00' * zpad
-                break
         
-        # Add continuations (and overwrite primary blocktype at end)
-        for b in range(blocks):
-            struct.pack_into( "<H", working, 128*b, blocktype & 0x7F )
-        struct.pack_into( "<H", working, 0, blocktype )
+        struct.pack_into( "<H", bt, 0, type(self).blocktype )
+        working = bt + b'XX'+data[:124] # blocktype, space for block count, and some data
+        length -= 124
+        data = data[124:]
+
+        # Add additional blocks
+        while length > 0:
+            blocks += 1
+            struct.pack_into( "<H", bt, 0, ( type(self).blocktype & 0x7F ) )
+            working += bt + data[:126] # Continuation block type and data
+            data = data[126:]
+            length -= 126
+
+        # Zero-pad last block
+        zpad = (128 - (len(working) % 128)) % 128
+        working += b'\x00' * zpad
         
-        return blocks, working
+        # Add total block count to first block
+        struct.pack_into( "<H", working, 2, blocks )
         
-    def EmptyBlock( self ):
-        return bytearray(b'\x00' * 128 )
+        self.UpdateSizes( blocks )
+        self.Write( working )
         
+    def UpdateSizes( self, blocks ):
+        self.database.header['usedblocks'] += blocks
+        self.database.header['allocatedblocks'] += blocks
+        
+    def Write( self, data ):
+        self.fol_fileout.write( data )
+
+class FormRecordOut(RecordOut):
+    blocktype = 0x82
     
-    
-    def DataRecord( self, field_values ):
+    def Create( self ):
+        self.Split_Label_2_Blocks( self.database.fulldef['form'] )
+
+class ViewRecordOut(RecordOut):
+    blocktype = 0x83
+
+    def Create( self ):
+        self.Split_Label_2_Blocks( self.database.fulldef['view'] )
+
+class ProgramRecordOut(RecordOut):
+    blocktype = 0x84
+
+    def Create( self ):
+        self.Split_Label_2_Blocks( self.database.fulldef['program'] )
+
+class EmptyRecordOut(RecordOut):
+
+    def Create( self ):
+        self.UpdateSizes( 1 )
+        working = b'\x00'*128
+        self.Write(working)
+
+class HeaderRecordOut(RecordOut):
+
+    def Create( self ):
+        self.database.header['usedblocks'] = 3
+        self.database.header['allocatedblocks'] = 3
+        working = self.database.header['fulldef']
+        self.Write(working)
+
+class DataRecordOut(RecordOut):
+    blocktype = 0x81
+
+    def Create( self, field_values ):
         # return blocks and record bytearray
         ba = bytearray(b'')
         for f in field_values:
-            print(f)
-            ba += self.WriteDataField(f)
-        return self.Fixup( 0x81, ba )
+            ba += self.SingleField(f)
+        self.Split_Label_2_Blocks( ba )
         
-        
-    def WriteDataField( self, string ):
+    def SingleField( self, string ):
         # returns bytearray
-        ba = bytearray(b'XX')
-        cr = 0
-        for b in string:
-            ba.append(b)
-            if b == 0x0d:
-                cr += 1
+        ba = bytearray(b'XX')+string.encode('utf-8').replace(b'\n',b'\r')
+        cr = ba.count(b'\r')
         struct.pack_into('>H',ba,0,len(string)+cr)
         return ba
-        
-    def Test( self ):
-        hexdump( self.blocksRecord( [b'hello\r', b'more    ',b'123'])[1] )
 
+class FOLfile_out:
+    
+    def __init__(self, database, fol_fileout ):
+        self.database = database
+        self.fol_fileout = fol_fileout
+        
+        self.Write()
+        self.fol_fileout.close()
+        
+    def Write( self ):
+
+        # Old header (will be updated)
+        HeaderRecordOut( self.database, self.fol_fileout ).Create()
+
+        # Empties list
+        self.database.header['emptieslist'] = 0
+        EmptyRecordOut( self.database, self.fol_fileout ).Create()
+        EmptyRecordOut( self.database, self.fol_fileout ).Create()
+        EmptyRecordOut( self.database, self.fol_fileout ).Create()
+        EmptyRecordOut( self.database, self.fol_fileout ).Create()
+
+        # Form Definition
+        self.database.header['formdef'] = self.database.header['allocatedblocks']+1
+        FormRecordOut( self.database, self.fol_fileout ).Create()
+
+        # Table View
+        if self.database.fulldef['view'] is not None:
+            self.database.header['view'] = self.database.header['allocatedblocks']+1
+            ViewRecordOut( self.database, self.fol_fileout ).Create()
+
+        # Program
+        if self.database.fulldef['program'] is not None:
+            self.database.header['program'] = self.database.header['allocatedblocks']+1
+            ProgramRecordOut( self.database, self.fol_fileout ).Create()
+            
+        # All data records
+        self.database.header['records'] = 0
+        for f in self.database.data:
+            DataRecordOut( self.database, self.fol_fileout).Create( f )
+            self.database.header[ 'records' ] += 1
+
+        # Update header
+        self.fol_fileout.seek(0)
+        self.fol_fileout.write( struct.pack(
+            '<4H14s9HB',
+            self.database.header['formdef'],self.database.header['usedblocks'],self.database.header['allocatedblocks'],
+            self.database.header['records'],self.database.header['gerb'],self.database.header['fields'],
+            self.database.header['formlength'],self.database.header['formrevisions'],self.database.header['unknown1'],
+            self.database.header['emptieslist'],self.database.header['view'],self.database.header['program'],
+            self.database.header['proglines'],self.database.header['diskvartype'],self.database.header['diskvarlen']
+            )
+        )
+    
 def signal_handler( signal, frame ):
     # Signal handler
     # signal.signal( signal.SIGINT, signal.SIG_IGN )
     sys.exit(0)
 
+def CommandLine():
+    """Setup argparser object to process the command line"""
+    cl = argparse.ArgumentParser(description="Use a PFS:First Choice v3 database file (.FOL) for data access and writing. 2020 by Paul H Alfille")
+    cl.add_argument("In",help="Existing database file (type .FOL)",type=argparse.FileType('rb'))
+    cl.add_argument("Out",help="New database file",type=argparse.FileType('wb'),nargs='?',default="OUTPUT.FOL")
+#    cl.add_argument("O",help="Depth of large Box (default Cube)",type=int,nargs='?',default=None)
+#    cl.add_argument("-m","--maximum",help="Maximum size of tiling square allowed",type=int,nargs='?',default=None)
+#    cl.add_argument("-s","--show",help="Show the solutions graphically",action="store_true")
+#    cl.add_argument("-3","--cube",help="3-D solution -- cubes in box",action="store_true")
+#    cl.add_argument("-q","--quiet",help="Suppress more and more displayed info (can be repeated)",action="count")
+    return cl.parse_args()
         
 if __name__ == '__main__':
+    """
+    First Choice FOLfile_in File
+    *.fol
+    """
+    args = CommandLine() # Get args from command line
+
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
     # Start program
-    #CreateDatabase().Test()
-    sys.exit(validate())
+    dbase = FOLfile_in( args.In )
+    FOLfile_out( dbase, args.Out )
+    sys.exit(None)
