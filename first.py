@@ -2,11 +2,41 @@
 
 # First choice pack and unpack into sqlite
 
-import sys
-import struct
-import signal
-import argparse # for parsing the command line
+try:
+    import sys
+except:
+    print("Please install the sys module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+try:
+    import struct
+except:
+    print("Please install the struct module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+try:
+    import signal
+except:
+    print("Please install the signal module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+try:
+    import argparse # for parsing the command line
+except:
+    print("Please install the argparse module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
 
+try:
+    import sqlite3
+except:
+    print("Please install the sqlite3 module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
 
 BLOCKSIZE = 128
 
@@ -231,7 +261,6 @@ class TextField:
                         Sup.Set(_html,e==0x85)
                         Sub.Set(_html,e==0x83)
 
-
                         if c == 0 :
                             _text +=' '
                             _html.append('&nbsp')
@@ -251,15 +280,14 @@ class TextField:
                         Sup.Set(_html,e==0x84)
                         Sub.Set(_html,e==0x82)
 
-
                         if c == 0 :
-                            _text +=' '
+                            _ftext +=' '
                             _html.append('&nbsp')
                         elif c in type(self).html_esc :
-                            _text += chr(c)
+                            _ftext += chr(c)
                             _html.append(type(self).html_esc[c])
                         else:
-                            _text += chr(c)
+                            _ftext += chr(c)
                             _html.append(c)
                 
                 elif d >= 0x90 and d <= 0x9f:
@@ -397,7 +425,7 @@ class FOLfile_in:
         self.dbase = dbase
         self.filename = sys.argv[-2]
         self.blocknum = 0
-        self.data = []
+        self.data = [] # List or record data tupples
         self.blocks = [[0,""]]
 
         self.fulldef={
@@ -481,7 +509,7 @@ class FOLfile_in:
             'diskvarlen'     : data[14],
             'diskvar'        : data[15][:data[14]],
             }
-        print( self.header )
+        #print( self.header )
         self.header['fulldef'] = headdata
         if self.header['usedblocks'] != self.header['allocatedblocks']:
             print("Blocks don't match")
@@ -503,13 +531,14 @@ class FOLfile_in:
         #print('\n')
 
     def ReadData( self, d ):
-        self.data.append([])
+        datalist = []
         for i in range( self.header['fields'] ):
             t = TextField(d)
             d = t.rest
-            self.data[-1].append(t.text)
+            datalist.append(t.text)
+        self.data.append(tuple(datalist))
             
-        print(self.data[-1])
+        #print(self.data[-1])
     
     def ReadView( self, d ):
         self.view = []
@@ -531,7 +560,7 @@ class FOLfile_in:
         self.form={}
         self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
         
-        print("Formlength=",self.form['length'],"formlines=",self.form['lines'])
+        #print("Formlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
         self.form['fields'] = []
         for i in range( self.header['fields'] ):
@@ -539,7 +568,6 @@ class FOLfile_in:
             d = t.rest
             tot_length += t.length
             self.form['fields'].append({'text':t.text,'field':t.ftext,'type':t.fieldtype})
-            print(t.ftext)
         #if tot_length != self.header['fields'] + self.header['formlength'] - 1:
         #    print("Formlength in header doesn't match computed");
         if self.form['length'] != tot_length + self.form['lines'] + 1:
@@ -616,6 +644,26 @@ class FOLfile_in:
             print("Unknown = {:02X}".format(t))
             hexdump(d)
             
+class FOLfile_in_sql(FOLfile_in):
+    def __init__(self,dbase):
+        self.conn = sqlite3.connect('sql.db')
+        super().__init__(dbase)
+        self.curse = self.conn.cursor()
+        
+        # Delete old table
+        self.curse.execute('DROP TABLE IF EXISTS first')
+        
+        # Create new table
+        print('CREATE TABLE first (' + ','.join([f['field']+' text' for f in self.form['fields']]) + ')') 
+        self.curse.execute('CREATE TABLE first (' + ','.join(['\"'+f['field']+'\" text' for f in self.form['fields']]) + ')') 
+        
+        # Add all data
+        self.curse.executemany('INSERT INTO first VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',self.data)
+        self.conn.commit()
+
+    def __del__(self):
+        self.conn.close()
+
 class RecordOut:
     def __init__( self, database, fol_fileout ):
         self.database = database
@@ -700,6 +748,7 @@ class DataRecordOut(RecordOut):
 
     def Create( self, field_values ):
         # return blocks and record bytearray
+        # field_values is a tuple
         ba = bytearray(b'')
         for f in field_values:
             ba += self.SingleField(f)
@@ -765,6 +814,19 @@ class FOLfile_out:
             )
         )
     
+class FOLfile_out_sql(FOLfile_out):
+    
+    def __init__(self, database, fol_fileout ):
+        self.database = database
+        self.fol_fileout = fol_fileout
+        
+        print(list(self.database.curse.execute('SELECT * FROM first')))
+        
+        self.Write()
+        self.fol_fileout.close()
+        
+
+
 def signal_handler( signal, frame ):
     # Signal handler
     # signal.signal( signal.SIGINT, signal.SIG_IGN )
@@ -792,6 +854,6 @@ if __name__ == '__main__':
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
     # Start program
-    dbase = FOLfile_in( args.In )
-    FOLfile_out( dbase, args.Out )
+    dbase = FOLfile_in_sql( args.In )
+    FOLfile_out_sql( dbase, args.Out )
     sys.exit(None)
