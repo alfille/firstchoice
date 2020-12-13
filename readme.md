@@ -103,7 +103,7 @@ Always first block (block 0)
 
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
-|0|2|int|Post-header block|
+|0|2|int|Form definition location (block#-1)|
 |2|2|int|Last used block **not always accurate** |
 |4|2|int|Total file blocks - 1|
 |6|2|int|Data records|
@@ -113,10 +113,10 @@ Always first block (block 0)
 |26|2|int|Form revisions (starts at 1)|
 |28|2|int|more2|
 |30|2|int|entries in empties list, 0 for none|
-|32|2|int|Table View location (block-1), 0xFFFF for none|
-|34|2|int|Block number of program record (block-1)|
-|36|2|int|Program lines (excluding comments)|
-|38|2|int|diskvartype 2=none 1=exists|
+|32|2|int|Table View location (block#-1), 0xFFFF for none|
+|34|2|int|Block number of program record (block#-1)|
+|36|2|int|more 6|
+|38|2|int|more 7|
 |40|1|byte|size of next field (8 byte minimum)||
 |41||chars|@DISKVAR value for formulas|
 
@@ -129,7 +129,78 @@ Always 5th block (block 4)
 
 | Location | Size |
 |----:|-----:|
-|Int (2byte) block number -1|Int number of blocks|
+|Int (2byte) block# -1|Int number of blocks|
+
+### Text Encoding
+
+#### Types
+* Field names
+* Background text
+* Data text
+
+#### Addative attributes
+* **Bold** on/off
+* *Italic* on/off
+* _Underline_ on/off
+* These attributes are addative
+
+#### Exclusive attributes
+* Nornal
+* Superscript
+* Subscript
+* These attributes are mutually exclusive, but can be combined with Bold/Italic/Underline
+
+#### General format
+| Size |Type| Description |
+|-----:|:---|:------------|
+|2|int-BE|Field size (in bytes)|
+|multiple|bytes|text bytes|
+
+#### Text bytes -- 1 byte char
+| Position |Type|Value|Description |
+|-----:|:---|:---|:---------|
+|1|all|0x13|Carriage Return (counts as 2 bytes in field length)|
+|1|data|0x00-0x7F|Ascii character (counts as one byte)|
+
+#### Text bytes -- 2 byte char
+|Position|Type|Value|Description |
+|-----:|:---|:---|:---------|
+|1|all|0x80|space|
+|1|field|0x81|Text (default)|
+|1|field|0x82|Numeric|
+|1|field|0x83|Date|
+|1|field|0x84|Time|
+|1|field|0x85|Yes/No|
+|2|field|0x90|normal|
+|2|field|0x91|_Underline_|
+|2|field|0x92|**Bold**|
+|2|field|0x94|*Italic*|
+|2|data|0x81|_Underline_|
+|2|data|0x82|**Bold**|
+|2|data|0x84|*Italic*|
+
+#### Text bytes -- 3 byte char
+|Position|Type|Value|Description |
+|-----:|:---|:---|:---------|
+|1|all|0x80|space|
+|1|field|0x81|Text (default)|
+|1|field|0x82|Numeric|
+|1|field|0x83|Date|
+|1|field|0x84|Time|
+|1|field|0x85|Yes/No|
+|2|background,field|0xd0|normal|
+|2|background,field|0xd1|_Underline_|
+|2|background,field|0xd2|**normal**|
+|2|background,field|0xd4|Italic|
+|2|data|0xd0|normal|
+|2|data|0xd1|_Underline_|
+|2|data|0xd2|**normal**|
+|2|data|0xd4|Italic|
+|3|field,data|0x82|subscript|
+|3|field,data|0x84|superscript|
+|3|background|0x81|normal|
+|3|background|0x83|subscript|
+|3|background|0x85|superscript|
 
 ### Form Description Record
 note that "int-BE" is Big Endian integer
@@ -154,59 +225,18 @@ note that "int-BE" is Big Endian integer
 #### Form Field 
 Background text, CR and spaces are optional and may be multiple.
 
-| Size |Type| Description |
-|-----:|:---|:------------|
-|2|int-BE|Field size (in bytes)|
-|3X|text chars| Background text (See Background Text Encoding)|
-|1X|char| 0x0d Carriage return |
-|2X|char|Field name (See Field Name Encoding)|
-|1X|char| 0x20 space|
-|1X|char| 0x0d Carriage return |
-
-#### Background Text Encoding
-Text (for the "background text" in the form) are 3-bytes per character:
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|1|byte|Ascii char + highbit|
-|||0x80 for space|
-|1|byte|0xd0 nornal, 0xd1 _Underline_, 0xd2 **Bold**, 0xd4 *Italic*|
-|1|byte|0x81 normal, 0x83 subscript, 0x85 superscript|
 
 #### Field Name Encoding
 Field names are 2 bytes per char plus a field type char:
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|1|byte|Ascii char + highbit|
-|||0x80 for space|
-||| 0x81 Freeform field type|
-||| 0x82 Numeric|
-||| 0x83 Date|
-||| 0x84 Time|
-||| 0x85 Yes/No |
-|1|byte|0x90 normal, 0x91 _Underline_, 0x92 **Bold**, 0x94 *Italic*|
-
-0x20 for trailing spaces
-0x0d for trailing CR
 
 ### Data Record
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
 |0|2|int|0x81 Data record start|
-|2|2|int|total blocks (this + continuations)|
+||||Data Fields|
 
 #### Data Field
 A 0x0d is added to end if next field in on another line
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|2|int-BE|Field size (in bytes)|
-|1X|chars|Text -- straight ascii|
-|2X|chars|2 byte extended char|
-| 1|byte| ascii | 0x80 (high bit set)|
-| 1|byte| format byte e.g. 0x82 for **bold**|
-|1|char|0x0d **counts for 2 bytes** |
 
 Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
 
@@ -219,26 +249,14 @@ Data entry length cannot extend past location of next field on screen. (I.e. lon
 #### Field width
 A 0x0d is added to end if next field in on another line
 
-| Size |Type| Description |
-|-----:|:---|:------------|
-|2|int-BE|Field size (in bytes)|
-|1X|chars|Text -- straight ascii -- numeric width|
-|1|char|0x0d **counts for 2 bytes** |
-
 ### Program Record
 | Pos | Size |Type| Description |
 |----:|-----:|:---|:------------|
 |0|2|int|0x84 Data record start|
 |2|2|int|total blocks (this + continuations)|
 
-#### Progral line
+#### Program line
 A 0x0d is added to end if next field in on another line
-
-| Size |Type| Description |
-|-----:|:---|:------------|
-|2|int-BE|Field size (in bytes)|
-|1X|chars|Text -- straight ascii|
-|1|char|0x0d **counts for 2 bytes** |
 
 Data entry length cannot extend past location of next field on screen. (I.e. long fields do not move next field).
 
