@@ -47,7 +47,11 @@ except:
     
 
 BLOCKSIZE = 128
-Verbose = 0
+ArgVerbose = 0
+ArgFields = 0
+ArgData = 0
+ArgBlocks = 0
+
 
 class ScreenLoc:
     def __init__(self):
@@ -144,7 +148,6 @@ class DataField(textwrap.TextWrapper):
         
     def Parse( self, inputstring ):
         # clean up input
-        print("Parse ",bytes(inputstring,'utf-8'))
         
         #strip ends
         ss = inputstring.strip()
@@ -160,7 +163,6 @@ class DataField(textwrap.TextWrapper):
         sl = (ss).split('\n')
         
         if not self.FitOld(sl):
-            print("Wrap!")
             sl = self.wrap(ss)
             # get rid of fake indent that takes place of field name
             sl[0] = ' '+sl[0].lstrip()
@@ -174,18 +176,18 @@ class DataField(textwrap.TextWrapper):
         return '\n'.join(sl)
                     
 def Print1( *args, **kwargs):
-    global Verbose
-    if Verbose >= 1:
+    global ArgVerbose
+    if ArgVerbose >= 1:
         print( *args, **kwargs)
 
 def Print2( *args, **kwargs):
-    global Verbose
-    if Verbose >= 2:
+    global ArgVerbose
+    if ArgVerbose >= 2:
         print( *args, **kwargs)
 
 def Print3( *args, **kwargs):
-    global Verbose
-    if Verbose >= 3:
+    global ArgVerbose
+    if ArgVerbose >= 3:
         print( *args, **kwargs)
 
 
@@ -474,7 +476,7 @@ class TextField:
                         self.SupSub( e, _html )
                         self.AddChar( c, _text, _html )
                                 
-        print("Data",len(_text[0]),_length,bytes(_text[0],'utf-8'))
+        #print("Data",len(_text[0]),_length,bytes(_text[0],'utf-8'))
         self.parsed = {
             'text' : _text[0],
             'html' : _html.string,
@@ -699,22 +701,24 @@ class FOL_handler:
         Print3('\n')
 
     def ReadData( self, d ):
+        global ArgData
         datalist = []
         for i in range( self.header['fields'] ):
             t = TextField(d)
             d = t.rest
             
             # strip white spaace and extra line-end padding
-            print(len(t.text),"<",bytes(t.text,'utf-8'),">")
+            #print(len(t.text),"<",bytes(t.text,'utf-8'),">")
             s = t.text.strip()
             while s.count(' \n') > 0:
                 s = s.replace(' \n','\n')
             datalist.append(s)
             
-        self.data.append(tuple(datalist))
+        tup = tuple(datalist)
+        self.data.append(tup)
+        if ArgData > 0:
+            print("Data: ",tup)
             
-        Print3(self.data[-1])
-    
     def ReadView( self, d ):
         self.view = []
         for i in range( self.header['fields'] ):
@@ -730,6 +734,7 @@ class FOL_handler:
             Print3(t.html)
     
     def ReadForm( self,d ):
+        global ArgFields
         self.form={}
         self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
         
@@ -756,72 +761,90 @@ class FOL_handler:
                 }
                 )
             self.form['textwrap'].append( DataField(self.form['fields'][-1]) )
-            print(t.ftext,sl.flocation," length=",sl.flength,self.form['textwrap'][-1].template)
+            #print(t.ftext,sl.flocation," length=",sl.flength,self.form['textwrap'][-1].template)
+        if ArgFields > 0:
+            print("Database field information:")
+            for f in self.form['fields']:
+                if ArgFields == 1:
+                    print("\t{}".format(f['field']))
+                else:
+                    print("\t{}\tlength={}\tlocation=".format(f['field'],f['length']),f['location'])
         if tot_length != self.header['fields'] + self.header['formlength'] - 1:
             Print2("Formlength in header doesn't match computed");
         if self.form['length'] != tot_length + self.form['lines'] + 1:
             Print3("Form.length in record doesn't match computed");
 
     def Block2Memory( self ):
+        global ArgBlocks
         # Note:
         #  will ignore block + continuation field (and not include)
         blocktype, blockdata = ( struct.unpack( type(self).nonheader_format, self.block ) )
         if blocktype == 0x82:
-            Print2("Block number ",self.blocknum,"\t","Form definition")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Form definition")
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x02:
             if self.blocks[-1][0] != 0x82:
                 Print1("Bad Continuation form")
-            Print2("Block number ",self.blocknum,"\t","Form definition continuation")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Form definition continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x81:
-            Print2("Block number ",self.blocknum,"\t","Data record")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Data record")
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x01:
             if self.blocks[-1][0] != 0x81:
-                Print1("Bad Continuation Data")
+                Print1("Bad Continuation data")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Data record continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x84:
-            Print2("Block number ",self.blocknum,"\t","Program")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Program")
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x04:
             if self.blocks[-1][0] != 0x84:
                 Print1("Bad Continuation program")
-            Print2("Block number ",self.blocknum,"\t","Program continuation")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Program continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x83:
-            Print2("Block number ",self.blocknum,"\t","Table View")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Table View")
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x03:
             if self.blocks[-1][0] != 0x83:
                 Print1("Bad Continuation view")
-            Print2("Block number ",self.blocknum,"\t","Table View continuation")
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Table View continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x00:
             Print2("Block number ",self.blocknum,"\t","Empty record")
             self.blocks.append( [blocktype, blockdata] )
         else:
-            Print2("Block number ",self.blocknum,"\t","Unknown type {:02x}".format(blocktype))
+            if ArgBlocks>0:
+                print("Block number ",self.blocknum,"\t","Unknown type {:02x}".format(blocktype))
             self.blocks.append( [blocktype, blockdata] )
         return blocktype
 
     def ParseRecord( self, t, d ):
         if t == 0x82:
-            Print2("Form definition")
+            #Print2("Form definition")
             #hexdump(d)
             self.fulldef['form'] = d
             self.ReadForm(d)
         elif t == 0x81:
-            Print2("Data")
+            #Print2("Data")
             #hexdump(d)
             self.ReadData(d)
         elif t == 0x84:
-            Print2("Program")
+            #Print2("Program")
             #hexdump(d)
             self.fulldef['program'] = d
             self.ReadProgram(d)
         elif t == 0x83:
-            Print2("Table View")
+            #Print2("Table View")
             #hexdump(d)
             self.fulldef['view'] = d
             self.ReadView(d)
@@ -830,7 +853,7 @@ class FOL_handler:
                 Print1("Unexpected entries")
                 hexdump(d)
         else:
-            Print2("Unknown = {:02X}".format(t))
+            #Print2("Unknown = {:02X}".format(t))
             hexdump(d)
             
     def Write( self ):
@@ -910,17 +933,22 @@ class SQL_FOL_handler(FOL_handler):
         #print(max([len(f) for r in self.data for f in r]))
         self.AddData()
 
-        self.curse.execute('SELECT *  FROM first WHERE _ID<?',(100,))
+        self.testsearch( 'SELECT *  FROM first WHERE _ID<?', (110,))
+        #self.testsearch( 'SELECT _ID  FROM first WHERE Color LIKE ?', ('%red%',))
+
+        s = SQL_record().findID(self.curse,13)
+        #print(SQL_record().Search( self.curse, {'Color' : '..red..' } ) )
+        #print(SQL_record().Search( self.curse, {'Color' : '..red..', "Region" : '..na..' } ) )
+        
+    def testsearch( self, sql_string, sql_tuple=None ):
+        print('testsearch',sql_string)
+        if sql_tuple is None:
+            self.curse.execute(sql_string)
+        else:
+            self.curse.execute(sql_string,sql_tuple)
         for f in self.curse.fetchall():
             print(f)
-        
-        s = SQL_record().findID(self.curse,13)
-        print(s)
-        print(s.tup)
-        print(self.fields)
-        print(SQL_record().Search( self.curse, {'Color' : '..red..' } ) )
-        
-    
+
     def Fields( self ):
         self.fields = [f['field'].replace(" ","_") for f in self.form['fields']]
         SQL_record.RegisterFields(self.fields)
@@ -976,7 +1004,7 @@ def FC2SQLquery( fld, fol_string ):
     if fol.find('..')>=0 or fol.find('?')>=0:
         return (
             fld + negate + ' LIKE ?', 
-            [fol.replace('..','_').replace('?','%')] 
+            [fol.replace('..','%').replace('?','_')] 
             )
         
     # Test for Range
@@ -1241,6 +1269,9 @@ if __name__ == '__main__':
     #    cl.add_argument("-m","--maximum",help="Maximum size of tiling square allowed",type=int,nargs='?',default=None)
     #    cl.add_argument("-s","--show",help="Show the solutions graphically",action="store_true")
     #    cl.add_argument("-3","--cube",help="3-D solution -- cubes in box",action="store_true")
+        cl.add_argument("-f","--fields",help="Show database fields (repeat for more detail)",action="count")
+        cl.add_argument("-d","--data",help="Show database data",action="count")
+        cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
         cl.add_argument("-v","--verbose",help="Add more output",action="count")
         return cl.parse_args()
         
@@ -1250,8 +1281,10 @@ if __name__ == '__main__': # command line
     *.fol
     """
     args = CommandLine() # Get args from command line
-    Verbose = args.verbose or 0
-    print("Verbose",Verbose,args)
+    ArgVerbose = args.verbose or 0
+    ArgFields = args.fields or 0
+    ArgBlocks = args.blocks or 0
+    ArgData = args.data or 0
     
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
