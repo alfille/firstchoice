@@ -51,6 +51,7 @@ ArgVerbose = 0
 ArgFields = 0
 ArgData = 0
 ArgBlocks = 0
+ArgSQL = 0
 
 
 class ScreenLoc:
@@ -908,6 +909,8 @@ class SQL_FOL_handler(FOL_handler):
     def __init__(self, FOLfile,  FOLout='OUTPUT.FOL' , sqlfile=None, **kwargs):
         # Read in the FOL file (dbase) into an sql database sqlfile -- None for memory
         # Alternatively use the connection to use an already opened database file
+        
+        global ArgSQL
 
         super().__init__( FOLfile,  FOLout, **kwargs)
         print(sqlfile)
@@ -917,16 +920,20 @@ class SQL_FOL_handler(FOL_handler):
         else:
             self.conn = sqlite3.connect(":memory:")
             
-        self.conn.create_function('regexp', 2, lambda x, y: 1 if x is not Null and y is not Null and re.search(x,y) else 0)
+        #self.conn.create_function('regexp', 2, lambda x, y: 1 if x is not Null and y is not Null and re.search(x,y) else 0)
 
         self.curse = self.conn.cursor()
         
         # Delete old table
         if sqlfile is not None:
+            if ArgSQL > 0 :
+                print('DROP TABLE IF EXISTS first')
             self.curse.execute('DROP TABLE IF EXISTS first')
         
         # Create new table
         self.Fields()
+        if ArgSQL > 0 :
+            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f['field'].replace(' ','_')+' TEXT' for f in self.form['fields']]) + ')')
         self.curse.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f['field'].replace(' ','_')+' TEXT' for f in self.form['fields']]) + ')') 
         
         # For interest -- the maximum field length
@@ -941,10 +948,14 @@ class SQL_FOL_handler(FOL_handler):
         #print(SQL_record().Search( self.curse, {'Color' : '..red..', "Region" : '..na..' } ) )
         
     def testsearch( self, sql_string, sql_tuple=None ):
-        print('testsearch',sql_string)
+        global ArgSQL
         if sql_tuple is None:
+            if ArgSQL > 0:
+                print(sql_string)
             self.curse.execute(sql_string)
         else:
+            if ArgSQL > 0:
+                print(sql_string,sql_tuple)
             self.curse.execute(sql_string,sql_tuple)
         for f in self.curse.fetchall():
             print(f)
@@ -955,19 +966,27 @@ class SQL_FOL_handler(FOL_handler):
         Print3(self.fields)
 
     def AddData( self ):
+        global ArgSQL
         # Add all data
+        if ArgSQL > 0:
+            print('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',"<all data>")
         self.curse.executemany('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',self.data)
         self.conn.commit()
         
     def Insert( self, sqlrec ):
+        global ArgSQL
         # Add all data
+        if ArgSQL > 0:
+            print('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',sqlreq.tup())
         self.curse.execute('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',sqlreq.tup())
         self.conn.commit()
         
     def Write( self ):
+        global ArgSQL
+        if ArgSQL > 0:
+            print('SELECT ' + ','.join(self.fields) + ' FROM first')
         self.curse.execute('SELECT ' + ','.join(self.fields) + ' FROM first')
         self.data = self.curse.fetchall()
-        Print2(self.data)
 
         super().Write()
 
@@ -1117,10 +1136,11 @@ class SQL_record:
         self._record = {}      
     
     def Search( self, cursor, search_dict ):
-        print(search_dict)
+        global ArgSQL
         where, params = self.where( search_dict )
         print(where,params)
-        print('SELECT _ID FROM first ' + where , params )
+        if ArgSQL > 0:
+            print('SELECT _ID FROM first ' + where , params )
         return cursor.execute('SELECT _ID FROM first ' + where , params ).fetchall()
 
     def where( self, search_dict ):
@@ -1147,6 +1167,9 @@ class SQL_record:
             )
 
     def findID( self, cursor, ID ):
+        global ArgSQL
+        if ArgSQL > 0:
+            print('SELECT ' + ','.join(type(self).field_list) + ' FROM first WHERE _ID=?',(ID,))
         cursor.execute('SELECT ' + ','.join(type(self).field_list) + ' FROM first WHERE _ID=?',(ID,))
         result = cursor.fetchone()
         print(ID,"  --->  ",result)
@@ -1272,6 +1295,7 @@ if __name__ == '__main__':
         cl.add_argument("-f","--fields",help="Show database fields (repeat for more detail)",action="count")
         cl.add_argument("-d","--data",help="Show database data",action="count")
         cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
+        cl.add_argument("-s","--sql",help="Show SQL statements",action="count")
         cl.add_argument("-v","--verbose",help="Add more output",action="count")
         return cl.parse_args()
         
@@ -1285,6 +1309,7 @@ if __name__ == '__main__': # command line
     ArgFields = args.fields or 0
     ArgBlocks = args.blocks or 0
     ArgData = args.data or 0
+    ArgSQL = args.sql or 0
     
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
