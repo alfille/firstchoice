@@ -1,9 +1,27 @@
 # http_server_GET.py
 
-from http.server import BaseHTTPRequestHandler
-from urllib import parse
-import cgi
-
+try:
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+except:
+    print("Please install http.server module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+try:
+    from urllib import parse
+except:
+    print("Please install the urllib module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+try:
+    import cgi
+except:
+    print("Please install the cgi module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
+import first
 
 class GetHandler(BaseHTTPRequestHandler):
 
@@ -158,9 +176,16 @@ table, th, td {
 
 
 if __name__ == '__main__':
-    from http.server import HTTPServer
-    server = HTTPServer(('localhost', 8080), GetHandler)
-    print('Starting server, use <Ctrl-C> to stop')
+    
+    addr = 'localhost'
+    port = 8080
+    
+    try:
+        server = HTTPServer((addr, port), GetHandler)
+    except:
+        print("Could not start server -- is another instance already using that port?")
+        exit()
+    print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(addr,port))
 
     with open('favicon.ico','rb') as f:
         icon_data = f.read()
