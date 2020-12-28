@@ -742,7 +742,6 @@ class FOL_handler:
         Print3("Formlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
         self.form['fields'] = []
-        self.form['textwrap'] = []
         sl = ScreenLoc()
         for i in range( self.header['fields'] ):
             t = TextField(d)
@@ -761,7 +760,7 @@ class FOL_handler:
                 'length':sl.flength,
                 }
                 )
-            self.form['textwrap'].append( DataField(self.form['fields'][-1]) )
+            self.form['fields'][-1]['textwrap'] = DataField(self.form['fields'][-1])
             #print(t.ftext,sl.flocation," length=",sl.flength,self.form['textwrap'][-1].template)
         if ArgFields > 0:
             print("Database field information:")
@@ -902,8 +901,6 @@ class FOL_handler:
         )
         
         self.FOLout.close()
-
-
             
 class SQL_FOL_handler(FOL_handler):
     def __init__(self, FOLfile,  FOLout='OUTPUT.FOL' , sqlfile=None, **kwargs):
@@ -913,87 +910,32 @@ class SQL_FOL_handler(FOL_handler):
         global ArgSQL
 
         super().__init__( FOLfile,  FOLout, **kwargs)
-        print(sqlfile)
 
-        if sqlfile is not None:
-            self.conn = sqlite3.connect(sqlfile)
-        else:
-            self.conn = sqlite3.connect(":memory:")
-            
-        #self.conn.create_function('regexp', 2, lambda x, y: 1 if x is not Null and y is not Null and re.search(x,y) else 0)
-
-        self.curse = self.conn.cursor()
-        
-        # Delete old table
-        if sqlfile is not None:
-            if ArgSQL > 0 :
-                print('DROP TABLE IF EXISTS first')
-            self.curse.execute('DROP TABLE IF EXISTS first')
+        SQL_table.Prepare( sqlfile )
         
         # Create new table
         self.Fields()
-        if ArgSQL > 0 :
-            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f['field'].replace(' ','_')+' TEXT' for f in self.form['fields']]) + ')')
-        self.curse.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f['field'].replace(' ','_')+' TEXT' for f in self.form['fields']]) + ')') 
+        SQL_table.Create( self.fields )
+
+        # Put all FOL data into SQL table
+        SQL_table.AllDataPut(self.data)
+
+        s = SQL_record.FindID(13)
+        print(s)
         
-        # For interest -- the maximum field length
-        #print(max([len(f) for r in self.data for f in r]))
-        self.AddData()
-
-        self.testsearch( 'SELECT *  FROM first WHERE _ID<?', (110,))
-        #self.testsearch( 'SELECT _ID  FROM first WHERE Color LIKE ?', ('%red%',))
-
-        s = SQL_record().findID(self.curse,13)
-        #print(SQL_record().Search( self.curse, {'Color' : '..red..' } ) )
-        #print(SQL_record().Search( self.curse, {'Color' : '..red..', "Region" : '..na..' } ) )
+        #print(SQL_record().Search( {'Color' : '..red..' } ) )
+        #print(SQL_record().Search( {'Color' : '..red..', "Region" : '..na..' } ) )
         
-    def testsearch( self, sql_string, sql_tuple=None ):
-        global ArgSQL
-        if sql_tuple is None:
-            if ArgSQL > 0:
-                print(sql_string)
-            self.curse.execute(sql_string)
-        else:
-            if ArgSQL > 0:
-                print(sql_string,sql_tuple)
-            self.curse.execute(sql_string,sql_tuple)
-        for f in self.curse.fetchall():
-            print(f)
-
     def Fields( self ):
         self.fields = [f['field'].replace(" ","_") for f in self.form['fields']]
-        SQL_record.RegisterFields(self.fields)
         Print3(self.fields)
 
-    def AddData( self ):
-        global ArgSQL
-        # Add all data
-        if ArgSQL > 0:
-            print('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',"<all data>")
-        self.curse.executemany('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',self.data)
-        self.conn.commit()
-        
-    def Insert( self, sqlrec ):
-        global ArgSQL
-        # Add all data
-        if ArgSQL > 0:
-            print('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',sqlreq.tup())
-        self.curse.execute('INSERT INTO first (' + ','.join(self.fields) + ') VALUES ('+ ','.join(list('?'*self.header['fields'])) + ')',sqlreq.tup())
-        self.conn.commit()
+    def Insert( self, data_tuple ):
+        return SQL_record.Insert( data_tuple )
         
     def Write( self ):
-        global ArgSQL
-        if ArgSQL > 0:
-            print('SELECT ' + ','.join(self.fields) + ' FROM first')
-        self.curse.execute('SELECT ' + ','.join(self.fields) + ' FROM first')
-        self.data = self.curse.fetchall()
-
+        self.data = SQL_table.AllDataGet()
         super().Write()
-
-
-    def __del__(self):
-        self.conn.close()
-
 
 def FC2SQLquery( fld, fol_string ):
     # converts an first choice query to sqlite3 syntax
@@ -1095,53 +1037,85 @@ def FC2SQLquery( fld, fol_string ):
         [fol]
         )
 
-
-class SQL_record:
+class SQL_table:
     field_list = None
+    connection = None
+    total = 0
+    added = 0
+    updated = 0
+    deleted = 0
 
     @classmethod
-    def RegisterFields( cls, field_list ):
-        cls.field_list = field_list
-
-    def __init__( self ):
-        if type(self).field_list is None:
-            print("SQL_record uninitialized with field list")
-            raise ValueError
-        self.clear()
-        
-    def __setitem__(self,key,value):
-        self._record[key] = value
-    
-    def __getitem__(self,key):
-        if key in self._record:
-            return self._record[key]
-        return ''
-    
-    @property
-    def tup(self):
-        return tuple( [ self.__getitem__(f) for f in type(self).field_list] )
-    
-    @tup.setter
-    def tup(self, t):
-        for i,f in enumerate(type(self).field_list):
-            self._record[f] = t[i]
-    
-    def id_tup(self):
-        if '_ID' in self._record:
-            return (self.__getitem__('_ID'),*self.tup)
-        else:
-            return (None,*self.tup)
-            
-    def clear( self ):
-        self._record = {}      
-    
-    def Search( self, cursor, search_dict ):
+    def Prepare( cls, sqlfile ):
         global ArgSQL
+        if sqlfile is not None:
+            cls.connection = sqlite3.connect(sqlfile)
+        else:
+            cls.connection = sqlite3.connect(":memory:")
+            
+        # Delete old table
+        if sqlfile is not None:
+            if ArgSQL > 0 :
+                print('DROP TABLE IF EXISTS first')
+            cursor = cls.connection.cursor()
+            cursor.execute('DROP TABLE IF EXISTS first')
+        
+    @classmethod
+    def Create( cls, field_list ):
+        global ArgSQL
+        # Create new table
+        cls.field_list = field_list
+        if ArgSQL > 0 :
+            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f+' TEXT' for f in field_list]) + ', _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)')
+        cursor = cls.connection.cursor()
+        cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f+' TEXT' for f in field_list]) + ', _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)') 
+
+    @classmethod    
+    def AllDataGet( cls ):
+        global ArgSQL
+        if ArgSQL > 0:
+            print('SELECT ' + ','.join(cls.field_list) + ' FROM first')
+        cursor = cls.connection.cursor()
+        cursor.execute('SELECT ' + ','.join(cls.field_list) + ' FROM first')
+        return cursor.fetchall()
+
+    @classmethod    
+    def AllDataPut( cls, full_data_list ):
+        global ArgSQL
+        # Add all data
+        if ArgSQL > 0:
+            print('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')',"<Full Data List>")
+        cursor = cls.connection.cursor()
+        cursor.executemany('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')', full_data_list )
+        cls.connection.commit()
+        cursor.execute('SELECT COUNT(_ID) FROM first' )
+        cls.total = cursor.fetchone()[0]
+        
+class SQL_record(SQL_table):
+    @classmethod
+    def FindIDplus(cls, ID ):
+        r = cls.FindID(ID)
+        if r is None:
+            return None
+        return (ID,) + r
+            
+    @classmethod
+    def SearchDict( cls, search_dict ):
+        global ArgSQL
+        # Searches using a dict of field criteria (blank ignored)
         where, params = self.where( search_dict )
         print(where,params)
         if ArgSQL > 0:
             print('SELECT _ID FROM first ' + where , params )
+        cursor = cls.connection.cursor()
         return cursor.execute('SELECT _ID FROM first ' + where , params ).fetchall()
+
+    @classmethod
+    def Search( cls, search_tuple ):
+        global ArgSQL
+        # Searches using a tuple of field criteria (one for each field but blank ignored)
+        # by constructing a dict
+        return cls.SearchDict( {f:s for f,s in zip( cls.field_list, search_tuple ) if s is not None and len(s.strip())>0 } )
 
     def where( self, search_dict ):
         # returns the WHERE clause (if needed, else '')
@@ -1166,18 +1140,81 @@ class SQL_record:
             tuple(where_param)
             )
 
-    def findID( self, cursor, ID ):
+    @classmethod
+    def Insert( cls, data_tuple ):
         global ArgSQL
+        # Create a new SQL record
+        # return the new _ID
         if ArgSQL > 0:
-            print('SELECT ' + ','.join(type(self).field_list) + ' FROM first WHERE _ID=?',(ID,))
-        cursor.execute('SELECT ' + ','.join(type(self).field_list) + ' FROM first WHERE _ID=?',(ID,))
-        result = cursor.fetchone()
-        print(ID,"  --->  ",result)
-        if result is None:
-            self.clear()
-        else:
-            self.tup = result
-        return self
+            print('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')',data_tuple)
+        cursor = cls.connection.cursor()
+        cursor.execute('INSERT INTO first (' + ','.join(cls.field_list) + ', _ADDED) VALUES ('+ ','.join(list('?'*(len(cls.field_list)+1))) + ')',data_tuple+(1,))
+        cls.connection.commit()
+        cls.total += 1
+        cls.added += 1
+        return cursor.lastrowid
+        
+    @classmethod
+    def Update( cls, ID, data_tuple ):
+        global ArgSQL
+        # Upsdagte anSQL record
+        if ArgSQL > 0:
+            print('UPDATE first SET' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+        cursor = cls.connection.cursor()
+        cursor.execute('UPDATE first SET' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+        cls.connection.commit()
+        cursor.execute('SELECT COUNT(_ID) FROM first WHERE _CHANGED=1')
+        cls.updated=cursor.fetchone()[0]
+        
+    @classmethod
+    def Delete( cls, ID ):
+        global ArgSQL
+        # Delete an SQL record
+        if ArgSQL > 0:
+            print('DELETE FROM first WHERE _ID=?',(ID,) )
+        cursor = cls.connection.cursor()
+        cursor.execute('DELETE FROM first WHERE _ID=?',(ID,) )
+        cls.connection.commit()
+        cursor.execute('SELECT COUNT(_ID) FROM first WHERE _ADDED=1')
+        cls.added=cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(_ID) FROM first WHERE _CHANGED=1')
+        cls.updated=cursor.fetchone()[0]
+        cls.total -= 1
+        cls.deleted += 1
+        
+    @classmethod
+    def FindID( cls, ID=None ):
+        # return tuple of field values, except _ID
+        # ID = None for blank (new) record
+        global ArgSQL
+        if ID is None:
+            return tuple( ' ' * len(cls.field_list))
+        if ArgSQL > 0:
+            print('SELECT ' + ','.join(cls.field_list) + ' FROM first WHERE _ID=?',(ID,))
+        cursor = cls.connection.cursor()
+        cursor.execute('SELECT ' + ','.join(cls.field_list) + ' FROM first WHERE _ID=?',(ID,))
+        return cursor.fetchone()
+    
+    @classmethod
+    def RemoveFields( cls, fdict ):
+        for f in cls.field_list:
+            if f in fdict:
+                del fdict[f]
+    
+    @classmethod
+    def PadFields( cls, fdict ):
+        for f in cls.field_list:
+            if f not in fdict:
+                fdict[f] = ''
+                
+    @classmethod
+    def IsEmpty( cls, fdict ):
+        for f in cls.field_list:
+            if f not in fdict:
+                pass
+            if len(''.join([l.strip() for l in fdict[f].split('\n')])) > 0
+                return False
+        return True
 
 class RecordOut:
     def __init__( self, FOLclass, FOLout ):
@@ -1265,8 +1302,8 @@ class DataRecordOut(RecordOut):
         # return blocks and record bytearray
         # field_values is a tuple
         ba = bytearray(b'')
-        for tw,v in zip(self.FOLclass.form['textwrap'],field_values):
-            ba += self.SingleField(tw,v)
+        for f,v in zip(self.FOLclass.form['fields'],field_values):
+            ba += self.SingleField(f['textwrap'],v)
         self.Split_Label_2_Blocks( ba )
         
     def SingleField( self, tw, string ):
@@ -1328,17 +1365,13 @@ if __name__ == '__main__': # command line
     sys.exit(None)
     
 else: #module
-    dbase_class = None
     def OpenDatabase( databasename ):
-        global dbase
-        dbase_class = SQL_FOL_handler( databasename )
+        return SQL_FOL_handler( databasename )
         
-    def Fields():
-        global dbase_class
+    def Fields(dbase_class):
         return dbase_class.fields;
         
-    def SaveDatabase( newdatabase ):
-        global dbase_class
+    def SaveDatabase( dbase_class, newdatabase ):
         if dbase_class is not None:
             dbase_class.Write()
     
