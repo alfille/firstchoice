@@ -1212,7 +1212,7 @@ class SQL_record(SQL_table):
         for f in cls.field_list:
             if f not in fdict:
                 pass
-            if len(''.join([l.strip() for l in fdict[f].split('\n')])) > 0
+            if max([len(l.strip()) for l in fdict[f].split('\n')]) > 0:
                 return False
         return True
 
