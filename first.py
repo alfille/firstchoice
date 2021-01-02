@@ -922,6 +922,7 @@ class SQL_FOL_handler(FOL_handler):
 
         s = SQL_record.FindID(13)
         print(s)
+        print( SQL_record.IDtoDict( 14 ) )
         
         #print(SQL_record().Search( {'Color' : '..red..' } ) )
         #print(SQL_record().Search( {'Color' : '..red..', "Region" : '..na..' } ) )
@@ -1103,8 +1104,8 @@ class SQL_record(SQL_table):
     def SearchDict( cls, search_dict ):
         global ArgSQL
         # Searches using a dict of field criteria (blank ignored)
-        where, params = self.where( search_dict )
-        print(where,params)
+        where, params = cls.where( search_dict )
+        #print(where,params)
         if ArgSQL > 0:
             print('SELECT _ID FROM first ' + where , params )
         cursor = cls.connection.cursor()
@@ -1117,22 +1118,23 @@ class SQL_record(SQL_table):
         # by constructing a dict
         return cls.SearchDict( {f:s for f,s in zip( cls.field_list, search_tuple ) if s is not None and len(s.strip())>0 } )
 
-    def where( self, search_dict ):
+    @classmethod
+    def where( cls, search_dict ):
         # returns the WHERE clause (if needed, else '')
         # and the parameters for placeholders
         # as a tuple of string and tuple)
         where_clause = []
         where_param = []
         for s in search_dict:
-            print(s,search_dict[s])
-            if s not in type(self).field_list:
+            #print(s,search_dict[s])
+            if s not in cls.field_list:
                 continue
             q = FC2SQLquery( s, search_dict[s] )
             if q is None:
                 continue
             where_clause.append(q[0])
             where_param += q[1]
-            print( where_clause, where_param )
+            #print( "where",where_clause, where_param )
         if where_clause == []:
             return ( '', [])
         return (
@@ -1195,6 +1197,20 @@ class SQL_record(SQL_table):
         cursor.execute('SELECT ' + ','.join(cls.field_list) + ' FROM first WHERE _ID=?',(ID,))
         return cursor.fetchone()
     
+    @classmethod
+    def IDtoDict( cls, ID ):
+        return { f:v for f,v in zip( cls.field_list+['_ID'], cls.FindID( ID )+(ID,) ) }
+
+    @classmethod
+    def DicttoTup( cls, fdict ):
+        l = []
+        for f in cls.field_list:
+            if f in fdict:
+                l.append( fdict[f] )
+            else:
+                l.append('')
+        return tuple(l)
+
     @classmethod
     def RemoveFields( cls, fdict ):
         for f in cls.field_list:
