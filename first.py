@@ -1159,11 +1159,11 @@ class SQL_record(SQL_table):
     @classmethod
     def Update( cls, ID, data_tuple ):
         global ArgSQL
-        # Upsdagte anSQL record
+        # Update an SQL record
         if ArgSQL > 0:
-            print('UPDATE first SET' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+            print('UPDATE first SET ' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
         cursor = cls.connection.cursor()
-        cursor.execute('UPDATE first SET' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+        cursor.execute('UPDATE first SET ' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
         cls.connection.commit()
         cursor.execute('SELECT COUNT(_ID) FROM first WHERE _CHANGED=1')
         cls.updated=cursor.fetchone()[0]

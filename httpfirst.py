@@ -147,14 +147,16 @@ class CookieManager:
         return cls.active_cookies[session]['search'] 
 
     @classmethod
-    def SetLast( cls, cookie, last ):
+    def SetLast( cls, cookie, lastdict ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['last'] = last 
+        #print("setlast",lastdict) 
+        cls.active_cookies[session]['last'] = lastdict 
 
     @classmethod
     def GetLast( cls, cookie ):
         session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['last'] 
+        #print("getlast",cls.active_cookies[session]['last'])
+        return cls.active_cookies[session]['last']
         
 class DbaseField:
     # Convenience class to make finding field information easier
@@ -194,30 +196,31 @@ class DbaseField:
         
 class GetHandler(BaseHTTPRequestHandler):
     buttondict = {
-        'reset'    : ( 14, '#EDA9FB', 'Reset entries' ),
-        'search'   : ( 10, '#8CD7EE', 'Search' ),
-        'research' : ( 11, '#8CD7EE', 'Modify search' ),
-        'next'     : ( 11, '#8CD7EE', 'Next' ),
-        'back'     : ( 12, '#8CD7EE', 'Previous' ),
-        'save'     : ( 13, '#B1FABB', 'Update' ),
-        'add'      : ( 13, '#B1FABB', 'Add' ),
-        'copy'     : ( 79, '#ECF470', 'Duplicate' ),
-        'new'      : ( 20, '#B1FABB', 'New' ),
-        'delete'   : ( 30, '#E37791', 'Delete' ),
-        'cancel'   : ( 99, '#E37791', 'Cancel' ),
+        'reset'    : ( '#EDA9FB', 'Reset entries' ),
+        'search'   : ( '#8CD7EE', 'Search' ),
+        'research' : ( '#8CD7EE', 'Modify search' ),
+        'next'     : ( '#8CD7EE', 'Next' ),
+        'back'     : ( '#8CD7EE', 'Back' ),
+        'save'     : ( '#B1FABB', 'Update' ),
+        'add'      : ( '#B1FABB', 'Add' ),
+        'copy'     : ( '#ECF470', 'Duplicate' ),
+        'new'      : ( '#B1FABB', 'New' ),
+        'delete'   : ( '#E37791', 'Delete' ),
+        'cancel'   : ( '#E37791', 'Cancel' ),
+        'blank'    : ( '#0000A9', '' ),
         }
      
     def statusBar( self, formdict, text=''  ):
         self.wfile.write('<TABLE width=100% class=htable><TR>'.encode('utf-8') )
-        self.wfile.write('<TD>Total: {}</TD>'.format(first.SQL_record.total).encode('utf-8') )
-        self.wfile.write('<TD>Added: {}</TD>'.format(first.SQL_record.added).encode('utf-8') )
-        self.wfile.write('<TD>Changed: {}</TD>'.format(first.SQL_record.updated).encode('utf-8') )
-        self.wfile.write('<TD>Deleted: {}</TD>'.format(first.SQL_record.deleted).encode('utf-8') )
+        self.wfile.write('<TD class=htable>Total: {}</TD>'.format(first.SQL_record.total).encode('utf-8') )
+        self.wfile.write('<TD class=htable>Added: {}</TD>'.format(first.SQL_record.added).encode('utf-8') )
+        self.wfile.write('<TD class=htable>Changed: {}</TD>'.format(first.SQL_record.updated).encode('utf-8') )
+        self.wfile.write('<TD class=htable>Deleted: {}</TD>'.format(first.SQL_record.deleted).encode('utf-8') )
         if '_ID' in formdict:
-            self.wfile.write('</TR><TR><TD>Record = {}'.format(formdict['_ID']).encode('utf-8') )
+            self.wfile.write('</TR><TR><TD class=htable>Record = {}'.format(formdict['_ID']).encode('utf-8') )
         else:
-            self.wfile.write('</TR><TR><TD>Not in database'.encode('utf-8') )
-        self.wfile.write('</TD><TD colspan=3>{}</TD>'.format(text).encode('utf-8') )
+            self.wfile.write('</TR><TR><TD class=htable>Not in database'.encode('utf-8') )
+        self.wfile.write('</TD><TD class=htable colspan=3>{}</TD>'.format(text).encode('utf-8') )
         self.wfile.write('</TR></TABLE><BR>'.encode('utf-8') )
     
     def do_GET(self):        
@@ -270,13 +273,17 @@ class GetHandler(BaseHTTPRequestHandler):
         if 'button' not in formdict:
             # Empty dictionary
             formdict['button'] = "Edit"
+
+        button = ''
+        for b in type(self).buttondict:
+            if formdict['button'] == type(self).buttondict[b][1]:
+                button = b
+                break;
         
-        if formdict['button'] == "Reset":
+        if button == "reset":
             # Reset
             formdict = CookieManager.GetLast(self.cookie)
-            if 'button' in formdict and formdict['button'] == 'Reset':
-                formdict['button'] = 'Edit' # No infinite loop
-            self.statusBar( formdict, 'Reset record')
+            formdict['button'] = 'Edit' # No infinite loop
             return self.FORM( formdict )
 
         actbut = ['search','new','cancel']
@@ -284,7 +291,7 @@ class GetHandler(BaseHTTPRequestHandler):
 
         searchstate = CookieManager.GetSearch(self.cookie)
 
-        if formdict['button'] == 'Modify search':
+        if button == 'research':
             # Modify Last Search
             if searchstate is None:
                 self.statusBar( formdict, 'No prior search' )
@@ -293,7 +300,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 formdict = searchstate.last_dict
                 self.statusBar( formdict, 'Modify Search' )
 
-        elif formdict['button'] == 'Search':
+        elif button == 'search':
             # Search
             searchstate = SearchState(formdict)
             CookieManager.SetSearch( self.cookie, searchstate )
@@ -304,7 +311,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 formdict = first.SQL_record.IDtoDict(search)                
                 self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
 
-        elif formdict['button'] == 'Next':
+        elif button == 'next':
             # Next in search
             if searchstate is None:
                 self.statusBar( formdict, 'No prior search' )
@@ -316,7 +323,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     formdict = first.SQL_record.IDtoDict(search)                
                     self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
                 
-        elif formdict['button'] == 'Previous':
+        elif button == 'back':
             # Previous in search
             if searchstate is None:
                 self.statusBar( formdict, 'No prior search' )
@@ -328,7 +335,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     formdict = first.SQL_record.IDtoDict(search)                
                     self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
                 
-        elif formdict['button'] == 'Add':
+        elif button == 'add':
             # Add a Record
             if first.SQL_record.IsEmpty( formdict ):
                 self.statusBar( formdict, 'Empty record not added')
@@ -337,20 +344,28 @@ class GetHandler(BaseHTTPRequestHandler):
                 formdict = first.SQL_record.IDtoDict( first.SQL_record.Insert(first.SQL_record.DicttoTup(formdict)) )                
                 self.statusBar( formdict, 'Record Added')
 
-        elif formdict['button'] == 'Copy':
+        elif button == 'save':
+            # Update a Record
+            if '_ID' in formdict and formdict['_ID'] is not None:
+                formdict['_ID'] = first.SQL_record.Update(formdict['_ID'], first.SQL_record.DicttoTup(formdict))                
+                self.statusBar( formdict, 'Record Updated')
+            else:
+                self.statusBar( formdict, 'Record should be added')
+
+        elif button == 'copy':
             #Copy a Record
             if '_ID' not in formdict['button'] or formdict['button'] is None:
-                self.statusBar( formdict, 'Copy only valid for existing record')
+                self.statusBar( formdict, 'Copy only valid for an existing record')
             else:
                 formdict['_Id'] = None
                 self.statusBar( formdict, 'Copy of record')
 
-        elif formdict['button'] == 'Cancel' or formdict['button'] == 'New':
+        elif button == 'cancel' or button == 'new':
             # Clear
             formdict = {}
             self.statusBar( formdict, 'Enter record or search')
 
-        elif formdict['button'] == 'Delete':
+        elif button == 'delete':
             # Delete
             # not implemented yet
             # needs pop-up window and confirmation
@@ -405,14 +420,16 @@ class GetHandler(BaseHTTPRequestHandler):
             self.wfile.write( ('<td><textarea rows={} cols=78 name=\"{}\" id=\"{}\ maxlength={}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines) + fval + '</textarea></td>').encode('utf-8') ) 
         self.wfile.write( '</tr>'.encode('utf-8') ) 
         
-    def  _button( self, bname, bdisabled=False ):
-        if bdisabled:
-            return '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(bname,type(self).buttondict[bname][1],type(self).buttondict[bname][2])
-        else:
-            return '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(bname,type(self).buttondict[bname][1],type(self).buttondict[bname][2])
-    
     def BUTTONS( self, active_buttons, disabled_buttons ):
-        return ''.join([ self._button(n,n in disabled_buttons) for n in sorted( set( active_buttons + disabled_buttons), key=lambda b:type(self).buttondict[b][1] in disabled_buttons ) ])
+        blist=''
+        for b in ['search','next','back','research','blank','reset','copy','new','add','save','delete','blank','cancel']:
+            if b in active_buttons:
+                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(b,type(self).buttondict[b][0],type(self).buttondict[b][1])
+            elif b in disabled_buttons:
+                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(b,type(self).buttondict[b][0],type(self).buttondict[b][1])
+            else:
+                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format('blank',type(self).buttondict['blank'][0],type(self).buttondict['blank'][1])
+        return blist
 
     def _changescript( self ):
         return '''
@@ -514,6 +531,10 @@ body {
     }
 .htable {
     color: #00A9A9;
+    border-style: ridge;
+    border-width: 6px;
+    border-color: #CC00CC;
+    border-collapse: collapse;
     }
 .tda {
     text-align: right;
