@@ -371,7 +371,7 @@ class GetHandler(BaseHTTPRequestHandler):
             # needs pop-up window and confirmation
             formdict['button'] = 'New'
             self.statusBar( formdict, 'Cannot Delete (yet)')
-            return self.FORM( formdict )
+            formdict['button'] = 'Edit'    
 
         else:
             # Nothing
@@ -401,12 +401,12 @@ class GetHandler(BaseHTTPRequestHandler):
         first.SQL_record.PadFields( formdict )
 
         self.wfile.write(self._changescript().encode('utf-8') )
-        self.wfile.write( ('<form action="' + self.path + '" method="post"><table width=100%>').encode('utf-8') )
+        self.wfile.write( ('<form action="{}" method="post" id="mainform"><table width=100%>').format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
             self.wfile.write( ('<input type="hidden" name="_ID" value="{}" >').format(formdict['_ID']).encode('utf-8') )
         for f in DbaseField.flist:
             self._textfield( f,formdict[f.field] )
-        self.wfile.write( ('<td></td><td>{}</td>').format(self.BUTTONS(actbut,deactbut)).encode('utf-8') )
+        self.wfile.write( ('<td></td><td>{}</td>').format(self._buttons(actbut,deactbut)).encode('utf-8') )
         self.wfile.write( ('</table></form>').encode('utf-8') )
         
     def _textfield( self, datafield, fval ):
@@ -420,22 +420,34 @@ class GetHandler(BaseHTTPRequestHandler):
             self.wfile.write( ('<td><textarea rows={} cols=78 name=\"{}\" id=\"{}\ maxlength={}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines) + fval + '</textarea></td>').encode('utf-8') ) 
         self.wfile.write( '</tr>'.encode('utf-8') ) 
         
-    def BUTTONS( self, active_buttons, disabled_buttons ):
+    def _buttons( self, active_buttons, disabled_buttons ):
         blist=''
+        bd = type(self).buttondict
+        nb = 'blank'
+        nd = bd[nb]
         for b in ['search','next','back','research','blank','reset','copy','new','add','save','delete','blank','cancel']:
-            if b in active_buttons:
-                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(b,type(self).buttondict[b][0],type(self).buttondict[b][1])
-            elif b in disabled_buttons:
-                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(b,type(self).buttondict[b][0],type(self).buttondict[b][1])
+            d = bd[b]
+            if b == 'delete':
+                if b in active_buttons:
+                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}">'.format(b,d[0],d[1])
+                elif b in disabled_buttons:
+                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}" disabled>'.format(b,d[0],d[1])
+                else:
+                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(nb,nd[0],nd[1])
             else:
-                blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format('blank',type(self).buttondict['blank'][0],type(self).buttondict['blank'][1])
+                if b in active_buttons:
+                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(b,d[0],d[1])
+                elif b in disabled_buttons:
+                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(b,d[0],d[1])
+                else:
+                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(nb,nd[0],nd[1])
         return blist
 
     def _changescript( self ):
         return '''
 <script>
 function Able(n,v) {
-    x=document.getElementById(n);
+    var x=document.getElementById(n);
     if (x !==null) {x.disabled=!v}
 };
 function ChangeData() {
@@ -449,7 +461,16 @@ function ChangeData() {
     Able("reset",true);
     Able("save",true);
     Able("search",true);
-}</script>'''
+};
+function DeleteRecord() {
+    var x = confirm("Do you want to delete the record?");
+    var d = document.getElementById("delete");
+    if ( x == true ) {
+        d.setAttribute('type','submit');
+        d.value = "Delete";
+        document.getElementBiId("mainform").submit();
+        }
+};</script>'''
 
     def _post_message( self, form ):
         message_parts = [
