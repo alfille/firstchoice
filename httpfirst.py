@@ -204,9 +204,8 @@ class GetHandler(BaseHTTPRequestHandler):
         'save'     : ( '#B1FABB', 'Update' ),
         'add'      : ( '#B1FABB', 'Add' ),
         'copy'     : ( '#ECF470', 'Duplicate' ),
-        'new'      : ( '#B1FABB', 'New' ),
         'delete'   : ( '#E37791', 'Delete' ),
-        'cancel'   : ( '#E37791', 'Cancel' ),
+        'clear'   : ( '#E37791',  'Clear' ),
         'blank'    : ( '#0000A9', '' ),
         }
      
@@ -274,19 +273,23 @@ class GetHandler(BaseHTTPRequestHandler):
             # Empty dictionary
             formdict['button'] = "Edit"
 
+        # button = button name from form, translate to local index name
         button = ''
         for b in type(self).buttondict:
             if formdict['button'] == type(self).buttondict[b][1]:
                 button = b
                 break;
         
+        # Reset special handling -- get old formdict and reprocess
         if button == "reset":
             # Reset
             formdict = CookieManager.GetLast(self.cookie)
             formdict['button'] = 'Edit' # No infinite loop
             return self.FORM( formdict )
 
-        actbut = ['search','new','cancel']
+        # default active buttons
+        actbut = ['search','clear']
+        # default inactive buttons
         deactbut = ['add','reset']
 
         searchstate = CookieManager.GetSearch(self.cookie)
@@ -304,11 +307,14 @@ class GetHandler(BaseHTTPRequestHandler):
             # Search
             searchstate = SearchState(formdict)
             CookieManager.SetSearch( self.cookie, searchstate )
-            search = searchstate.first
-            if search is None:
+            searchID = searchstate.first
+            if searchID is None:
+                # no matches
                 self.statusBar( {},'Search: Not Found')
+                deactbut += ['search']
+                actbut.remove('search')
             else:
-                formdict = first.SQL_record.IDtoDict(search)                
+                formdict = first.SQL_record.IDtoDict(searchID)                
                 self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
 
         elif button == 'next':
@@ -316,11 +322,11 @@ class GetHandler(BaseHTTPRequestHandler):
             if searchstate is None:
                 self.statusBar( formdict, 'No prior search' )
             else:
-                search = searchstate.next
-                if search is None:
+                searchID = searchstate.next
+                if searchID is None:
                     self.statusBar( {},'Search: Not Found')
                 else:
-                    formdict = first.SQL_record.IDtoDict(search)                
+                    formdict = first.SQL_record.IDtoDict(searchID)                
                     self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
                 
         elif button == 'back':
@@ -328,11 +334,11 @@ class GetHandler(BaseHTTPRequestHandler):
             if searchstate is None:
                 self.statusBar( formdict, 'No prior search' )
             else:
-                search = searchstate.back
-                if search is None:
+                searchID = searchstate.back
+                if searchID is None:
                     self.statusBar( {},'Search: Not Found')
                 else:
-                    formdict = first.SQL_record.IDtoDict(search)                
+                    formdict = first.SQL_record.IDtoDict(searchID)                
                     self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
                 
         elif button == 'add':
@@ -341,16 +347,17 @@ class GetHandler(BaseHTTPRequestHandler):
                 self.statusBar( formdict, 'Empty record not added')
                 formdict['_Id'] = None
             else:
-                formdict = first.SQL_record.IDtoDict( first.SQL_record.Insert(first.SQL_record.DicttoTup(formdict)) )                
+                addID = first.SQL_record.Insert( first.SQL_record.DicttoTup(formdict) )                
+                formdict = first.SQL_record.IDtoDict( addID )                
                 self.statusBar( formdict, 'Record Added')
 
         elif button == 'save':
             # Update a Record
             if '_ID' in formdict and formdict['_ID'] is not None:
-                formdict['_ID'] = first.SQL_record.Update(formdict['_ID'], first.SQL_record.DicttoTup(formdict))                
+                formdict['_ID'] = first.SQL_record.Update( formdict['_ID'], first.SQL_record.DicttoTup(formdict) )                
                 self.statusBar( formdict, 'Record Updated')
             else:
-                self.statusBar( formdict, 'Record should be added')
+                self.statusBar( formdict, 'Record should be <U>Added</U>')
 
         elif button == 'copy':
             #Copy a Record
@@ -360,7 +367,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 formdict['_Id'] = None
                 self.statusBar( formdict, 'Copy of record')
 
-        elif button == 'cancel' or button == 'new':
+        elif button == 'clear':
             # Clear
             formdict = {}
             self.statusBar( formdict, 'Enter record or search')
@@ -394,9 +401,6 @@ class GetHandler(BaseHTTPRequestHandler):
             if searchstate.length > 0 :
                 # valid search
                 actbut += ['next','back']
-            else:
-                deactbut += ['search']
-                actbut.remove('search')
 
         first.SQL_record.PadFields( formdict )
 
@@ -425,7 +429,7 @@ class GetHandler(BaseHTTPRequestHandler):
         bd = type(self).buttondict
         nb = 'blank'
         nd = bd[nb]
-        for b in ['search','next','back','research','blank','reset','copy','new','add','save','delete','blank','cancel']:
+        for b in ['search','next','back','research','blank','reset','copy','add','save','delete','blank','clear']:
             d = bd[b]
             if b == 'delete':
                 if b in active_buttons:
@@ -455,7 +459,7 @@ function ChangeData() {
     Able("back",false);
     Able("copy",false);
     Able("delete",false);
-    Able("new",false);
+    Able("clear",false);
     Able("next",false);
     Able("research",true);
     Able("reset",true);

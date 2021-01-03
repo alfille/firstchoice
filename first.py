@@ -1199,6 +1199,7 @@ class SQL_record(SQL_table):
     
     @classmethod
     def IDtoDict( cls, ID ):
+        # includes _ID as a special case
         return { f:v for f,v in zip( cls.field_list+['_ID'], cls.FindID( ID )+(ID,) ) }
 
     @classmethod
