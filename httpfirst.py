@@ -220,7 +220,7 @@ class GetHandler(BaseHTTPRequestHandler):
         else:
             self.wfile.write('</TR><TR><TD class=htable>Not in database'.encode('utf-8') )
         self.wfile.write('</TD><TD class=htable colspan=3>{}</TD>'.format(text).encode('utf-8') )
-        self.wfile.write('</TR></TABLE><BR>'.encode('utf-8') )
+        self.wfile.write('</TR></TABLE>'.encode('utf-8') )
     
     def do_GET(self):        
         # Parse out special files
@@ -290,7 +290,7 @@ class GetHandler(BaseHTTPRequestHandler):
         # default active buttons
         actbut = ['search','clear']
         # default inactive buttons
-        deactbut = ['add','reset']
+        deactbut = ['reset']
 
         searchstate = CookieManager.GetSearch(self.cookie)
 
@@ -361,10 +361,10 @@ class GetHandler(BaseHTTPRequestHandler):
 
         elif button == 'copy':
             #Copy a Record
-            if '_ID' not in formdict['button'] or formdict['button'] is None:
+            if '_ID' not in formdict or formdict['_ID'] is None:
                 self.statusBar( formdict, 'Copy only valid for an existing record')
             else:
-                formdict['_Id'] = None
+                formdict['_ID'] = None
                 self.statusBar( formdict, 'Copy of record')
 
         elif button == 'clear':
@@ -374,11 +374,13 @@ class GetHandler(BaseHTTPRequestHandler):
 
         elif button == 'delete':
             # Delete
-            # not implemented yet
-            # needs pop-up window and confirmation
-            formdict['button'] = 'New'
-            self.statusBar( formdict, 'Cannot Delete (yet)')
-            formdict['button'] = 'Edit'    
+            # has pop-up window for confirmation
+            if '_ID' not in formdict or formdict['_ID'] is None:
+                self.statusBar( formdict, 'Delete only valid for an existing record')
+            else:
+                first.SQL_record.Delete( formdict['_ID'])
+                formdict['_ID'] = None
+                self.statusBar( formdict, 'Record deleted')
 
         else:
             # Nothing
@@ -393,7 +395,11 @@ class GetHandler(BaseHTTPRequestHandler):
         if formdict['_ID'] is not None:
             # existing record
             actbut += ['copy','delete']
-            deactbut += ['save']
+            deactbut += ['save','add']
+        else:
+            # not existing record
+            actbut += ['save','add']
+            deactbut += ['copy','delete']
 
         if searchstate is not None:
             # old search
@@ -459,7 +465,7 @@ function ChangeData() {
     Able("back",false);
     Able("copy",false);
     Able("delete",false);
-    Able("clear",false);
+    Able("clear",true);
     Able("next",false);
     Able("research",true);
     Able("reset",true);

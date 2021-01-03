@@ -1227,9 +1227,7 @@ class SQL_record(SQL_table):
     @classmethod
     def IsEmpty( cls, fdict ):
         for f in cls.field_list:
-            if f not in fdict:
-                pass
-            if max([len(l.strip()) for l in fdict[f].split('\n')]) > 0:
+            if f in fdict and max([len(l.strip()) for l in fdict[f].split('\n')]) > 0:
                 return False
         return True
 
