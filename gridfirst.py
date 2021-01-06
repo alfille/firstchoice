@@ -44,7 +44,6 @@ except:
     
 import first
 
-
 class SearchState:
     def __init__(self, dictionary):
         self._last_dict = self.FieldDict( dictionary )
@@ -113,6 +112,12 @@ class SearchState:
     def index( self ):
         # Not Zero-based
         return self._index + 1
+
+class TableState:
+    def __init__(self):
+        self.flist = DbaseField.flist
+        self.fields = [f.field.replace("_"," ") for f in DbaseField.flist]
+        
 
 class CookieManager:
     active_cookies = {}
@@ -214,7 +219,11 @@ class GetHandler(BaseHTTPRequestHandler):
         'blank'    : ( '#0000A9', '' ),
         }
      
-    def statusBar( self, formdict, text=''  ):
+    def _searchBar( self, formdict, searchstate ):
+        self._statusBar( formdict,'<meter value={0} min=1 max={1}></meter> Search: {0} of {1}'.format(searchstate.index,searchstate.length) )
+
+
+    def _statusBar( self, formdict, text=''  ):
         self.wfile.write('<DIV id="head-grid">'.encode('utf-8') )
 
         self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(first.SQL_record.total).encode('utf-8') )
@@ -231,20 +240,16 @@ class GetHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):        
         # Parse out special files
-        if self.path == '/style.css':
-            return self.CSS()
+        if self.path == '/formstyle.css':
+            return self.FORMCSS()
+        elif self.path == '/tablestyle.css':
+            return self.TABLECSS()
         elif self.path == '/favicon.ico':
             return self.ICON()
 
         self._get_cookie()
 
-        # Begin the response
-        self._head()
-        self.wfile.write('<head><link href="/style.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
-        self.wfile.write('<body><div class="firststyle">'.encode('utf-8'))
-        #self.wfile.write('<pre>{}</pre>'.format(self._get_message()).encode('utf-8'))
-        self.FORM({})
-        self.wfile.write('</div></body>'.encode('utf-8'))
+        self.PAGE({})
 
 
     def do_POST(self):
@@ -258,28 +263,44 @@ class GetHandler(BaseHTTPRequestHandler):
                      'CONTENT_TYPE':self.headers['Content-Type'],
                      })
 
-        # Begin the response
-        self._head()
-        self.wfile.write('<head><link href="/style.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
-        self.wfile.write(('<body><div class="firststyle">').encode('utf-8'))
         #self.wfile.write(('<pre>{}</pre>'.format(self._post_message(form))).encode('utf-8'))
 
         # Write the form (with headers)
-        self.FORM( { field:form[field].value for field in form.keys() } )
-        self.wfile.write(('</div></body>').encode('utf-8'))
+        self.PAGE( { field:form[field].value for field in form.keys() } )
     
+    def PAGE( self, formdict ):
+
+        # Begin the response
+        self._head()
+       
+        # Send to record or table view
+
+        # Note: initial entry is from "GET" -- with empty formdict        
+        if 'button' not in formdict:
+            # Empty dictionary
+            formdict['button'] = "Edit"
+        
+        if formdict['button'] == type(self).buttondict['table'][1]:
+            self.wfile.write('<head><link href="/tablestyle.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
+            #self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
+            self.wfile.write(('<body><div class="firststyle">').encode('utf-8'))
+            self.TABLE()
+        else:
+            self.wfile.write('<head><link href="/formstyle.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
+            self.wfile.write(('<body><div class="firststyle">').encode('utf-8'))
+            if formdict['button'] == type(self).buttondict['reset'][1]:
+                formdict = CookieManager.GetLast(self.cookie)
+                formdict['button'] = 'Edit' # No infinite loop
+            self.FORM( formdict )
+
+        self.wfile.write(('</div></body>').encode('utf-8'))
+
     def FORM( self, formdict ):
         # After a "POST" --- clicking one of the submit buttons
         # formdict has the button and field values (if entered)
         # Preserved state is pstate, last_formdict and last_searchdict
         # place in search stored in pstate SearchState
         
-        # Note: initial entry is from "GET" -- with empty formdict
-        
-        if 'button' not in formdict:
-            # Empty dictionary
-            formdict['button'] = "Edit"
-
         # button = button name from form, translate to local index name
         button = ''
         for b in type(self).buttondict:
@@ -287,14 +308,6 @@ class GetHandler(BaseHTTPRequestHandler):
                 button = b
                 break;
         
-        if button == "table":
-            return self.TABLE()
-        elif button == "reset":
-            # Reset special handling -- get old formdict and reprocess
-            formdict = CookieManager.GetLast(self.cookie)
-            formdict['button'] = 'Edit' # No infinite loop
-            return self.FORM( formdict )
-
         # default active buttons
         actbut = ['search','clear']
         # default inactive buttons
@@ -305,11 +318,11 @@ class GetHandler(BaseHTTPRequestHandler):
         if button == 'research':
             # Modify Last Search
             if searchstate is None:
-                self.statusBar( formdict, 'No prior search' )
+                self._statusBar( formdict, 'No prior search' )
 
             else:
                 formdict = searchstate.last_dict
-                self.statusBar( formdict, 'Modify Search' )
+                self._statusBar( formdict, 'Modify Search' )
 
         elif button == 'search':
             # Search
@@ -318,81 +331,81 @@ class GetHandler(BaseHTTPRequestHandler):
             searchID = searchstate.first
             if searchID is None:
                 # no matches
-                self.statusBar( {},'Search: Not Found')
+                self._statusBar( {},'Search: Not Found')
                 deactbut += ['search']
                 actbut.remove('search')
             else:
                 formdict = first.SQL_record.IDtoDict(searchID)                
-                self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
+                self._searchBar( formdict,searchstate )
 
         elif button == 'next':
             # Next in search
             if searchstate is None:
-                self.statusBar( formdict, 'No prior search' )
+                self._statusBar( formdict, 'No prior search' )
             else:
                 searchID = searchstate.next
                 if searchID is None:
-                    self.statusBar( {},'Search: Not Found')
+                    self._statusBar( {},'Search: Not Found')
                 else:
                     formdict = first.SQL_record.IDtoDict(searchID)                
-                    self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
+                    self._searchBar( formdict,searchstate )
                 
         elif button == 'back':
             # Previous in search
             if searchstate is None:
-                self.statusBar( formdict, 'No prior search' )
+                self._statusBar( formdict, 'No prior search' )
             else:
                 searchID = searchstate.back
                 if searchID is None:
-                    self.statusBar( {},'Search: Not Found')
+                    self._statusBar( {},'Search: Not Found')
                 else:
                     formdict = first.SQL_record.IDtoDict(searchID)                
-                    self.statusBar( formdict,'Search: {} of {}'.format(searchstate.index,searchstate.length) )
+                    self._searchBar( formdict,searchstate )
                 
         elif button == 'add':
             # Add a Record
             if first.SQL_record.IsEmpty( formdict ):
-                self.statusBar( formdict, 'Empty record not added')
+                self._statusBar( formdict, 'Empty record not added')
                 formdict['_Id'] = None
             else:
                 addID = first.SQL_record.Insert( first.SQL_record.DicttoTup(formdict) )                
                 formdict = first.SQL_record.IDtoDict( addID )                
-                self.statusBar( formdict, 'Record Added')
+                self._statusBar( formdict, 'Record Added')
 
         elif button == 'save':
             # Update a Record
             if '_ID' in formdict and formdict['_ID'] is not None:
                 formdict['_ID'] = first.SQL_record.Update( formdict['_ID'], first.SQL_record.DicttoTup(formdict) )                
-                self.statusBar( formdict, 'Record Updated')
+                self._statusBar( formdict, 'Record Updated')
             else:
-                self.statusBar( formdict, 'Record should be <U>Added</U>')
+                self._statusBar( formdict, 'Record should be <U>Added</U>')
 
         elif button == 'copy':
             #Copy a Record
             if '_ID' not in formdict or formdict['_ID'] is None:
-                self.statusBar( formdict, 'Copy only valid for an existing record')
+                self._statusBar( formdict, 'Copy only valid for an existing record')
             else:
                 formdict['_ID'] = None
-                self.statusBar( formdict, 'Copy of record')
+                self._statusBar( formdict, 'Copy of record')
 
         elif button == 'clear':
             # Clear
             formdict = {}
-            self.statusBar( formdict, 'Enter record or search')
+            self._statusBar( formdict, 'Enter record or search')
 
         elif button == 'delete':
             # Delete
             # has pop-up window for confirmation
             if '_ID' not in formdict or formdict['_ID'] is None:
-                self.statusBar( formdict, 'Delete only valid for an existing record')
+                self._statusBar( formdict, 'Delete only valid for an existing record')
             else:
                 first.SQL_record.Delete( formdict['_ID'])
                 formdict['_ID'] = None
-                self.statusBar( formdict, 'Record deleted')
+                self._statusBar( formdict, 'Record deleted')
 
         else:
             # Nothing
-            self.statusBar( formdict, 'Welcome')
+            self._statusBar( formdict, 'Welcome')
             
         formdict['button'] = 'Edit'    
         CookieManager.SetLast(self.cookie, formdict )
@@ -438,7 +451,8 @@ class GetHandler(BaseHTTPRequestHandler):
             self.wfile.write( ('<div class="rcell"><textarea rows={} cols=78 name=\"{}\" id=\"{}\ maxlength={}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines) + fval + '</textarea></div>').encode('utf-8') ) 
         
     def TABLE( self ):
-        #self.wfile.write(self._scrollscript().encode('utf-8') )
+
+        self.wfile.write(self._scrollscript().encode('utf-8') )
         self.wfile.write( '<div id="ttable">'.encode('utf-8') )
         for f in DbaseField.flist:
             self.wfile.write('<div class="thead">{}</div>'.format(f.field).replace('_',' ').encode('utf-8') )             
@@ -448,10 +462,12 @@ class GetHandler(BaseHTTPRequestHandler):
             searchstate = SearchState({})
             CookieManager.SetSearch( self.cookie, searchstate )
 
+        back = False
         for i in searchstate.list:
             print(i)
+            back = not back
             for f in first.SQL_record.FindID( i ):
-                self.wfile.write( '<div class="tcell">{}</div>'.format(f).encode('utf-8') ) 
+                self.wfile.write( '<div class="{}" onClick="chooseFunction({})">{}</div>'.format("tcell0" if back else "tcell1",i, f).encode('utf-8') ) 
 
         self.wfile.write( '</div>'.encode('utf-8') ) 
         
@@ -516,18 +532,6 @@ function DeleteRecord() {
     def _scrollscript( self ):
         return '''
 <script>
-    window.onscroll = function() {myFunction()};
-
-    var header = document.getElementById("myHeader");
-    var sticky = header.offsetTop;
-
-    function myFunction() {
-        if (window.pageYOffset > sticky) {
-            header.classList.add("sticky");
-        } else {
-            header.classList.remove("sticky");
-        }
-    }
 </script>'''
 
     def _post_message( self, form ):
@@ -585,7 +589,7 @@ function DeleteRecord() {
 
         self.end_headers()
     
-    def CSS( self ):
+    def FORMCSS( self ):
         # Begin the response
         self.send_response(200)
         self.send_header('Content-Type',
@@ -652,28 +656,45 @@ dev.lcellb {
     color:black;
     text-align: left;
     vertical-align: bottom;
-}
-#table-header {
-    background-color: #CC00CC;
-    color: #CC00CC;
-}
-#table-content {
-  padding: 16px;
-}
-#table-sticky {
-  position: fixed;
-  top: 0;
-  width: 100%;
-}
-#table-sticky + #table-content {
-  padding-top: 102px;
-}
+}'''.encode('utf-8') )
+                
+    def TABLECSS( self ):
+        # Begin the response
+        self.send_response(200)
+        self.send_header('Content-Type',
+                         'text/css; charset=utf-8')
+        self.end_headers()
+        self.wfile.write('''
+body {
+    font-size: 100%
+    }
+.firststyle {
+    background-color:#0000A9;
+    font-family: "Lucida Console", Monaco, monospace;
+    font-size: 1.5em;
+    letter-spacing: 2px;
+    word-spacing: 2px;
+    color: #A9A9A9;
+    font-weight: normal;
+    text-decoration: none;
+    font-style: normal;
+    font-variant: normal;
+    text-transform: none;
+    }
 div.thead {
     background-color: #00A9A9;
     color:black;
+    resize: horizontal;
+    overflow: auto;
+    top: 0;
+    position: sticky;
 }
-div.tcell {
+div.tcell0 {
     background-color:#0000A9;
+    color:yellow;
+}
+div.tcell1 {
+    background-color:#0000FF;
     color:yellow;
 }
 '''.encode('utf-8') )

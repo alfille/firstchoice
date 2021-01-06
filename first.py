@@ -1112,6 +1112,20 @@ class SQL_record(SQL_table):
         return cursor.execute('SELECT _ID FROM first ' + where , params ).fetchall()
 
     @classmethod
+    def SortedSearchDict( cls, flist, search_dict ):
+        global ArgSQL
+        # Search for a set of fields with the given criteria
+        # return tuples of the field list ordered by field
+        # Searches using a dict of field criteria (blank ignored)
+        where, params = cls.where( search_dict )
+        #print(where,params)
+        fields = ','.join(flist)
+        if ArgSQL > 0:
+            print('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,fields) , params )
+        cursor = cls.connection.cursor()
+        return cursor.execute('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,fields), params ).fetchall()
+
+    @classmethod
     def Search( cls, search_tuple ):
         global ArgSQL
         # Searches using a tuple of field criteria (one for each field but blank ignored)
