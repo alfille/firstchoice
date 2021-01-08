@@ -215,8 +215,9 @@ class GetHandler(BaseHTTPRequestHandler):
         'add'      : ( '#B1FABB', 'Add' ),
         'copy'     : ( '#ECF470', 'Duplicate' ),
         'delete'   : ( '#E37791', 'Delete' ),
-        'clear'   : ( '#E37791',  'Clear' ),
+        'clear'    : ( '#E37791',  'Clear' ),
         'blank'    : ( '#0000A9', '' ),
+        'id'       : ( '#000000', 'id' ),
         }
      
     def _searchBar( self, formdict, searchstate ):
@@ -302,6 +303,7 @@ class GetHandler(BaseHTTPRequestHandler):
         # place in search stored in pstate SearchState
         
         # button = button name from form, translate to local index name
+        print("formdict",formdict)
         button = ''
         for b in type(self).buttondict:
             if formdict['button'] == type(self).buttondict[b][1]:
@@ -403,6 +405,14 @@ class GetHandler(BaseHTTPRequestHandler):
                 formdict['_ID'] = None
                 self._statusBar( formdict, 'Record deleted')
 
+        elif button == 'id':
+            # Back from Table with just record Id -- need to populate
+            if '_ID' in formdict and formdict['_ID'] is not None:
+                formdict = first.SQL_record.IDtoDict( formdict['_ID'] )
+                self._statusBar( formdict, "Record selected" )
+            else:
+                self._statusBar( formdict, "Record not selected" )
+
         else:
             # Nothing
             self._statusBar( formdict, 'Welcome')
@@ -431,7 +441,7 @@ class GetHandler(BaseHTTPRequestHandler):
 
         first.SQL_record.PadFields( formdict )
 
-        self.wfile.write(self._changescript().encode('utf-8') )
+        self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
         #self.wfile.write( ('<form action="{}" method="post" id="mainform"><table width=100%>').format(self.path).encode('utf-8') )
         self.wfile.write( ('<form action="{}" method="post" id="mainform"><div id="form-grid">').format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
@@ -452,7 +462,12 @@ class GetHandler(BaseHTTPRequestHandler):
         
     def TABLE( self ):
 
-        self.wfile.write(self._scrollscript().encode('utf-8') )
+        # script
+        self.wfile.write(self.TABLESCRIPT().encode('utf-8') )
+        # hidden form
+        self.wfile.write( ('<form action="{}" method="post" id="hidden"><input type="hidden" name="_ID" id="_ID"><input type="hidden" name="button" value="id"></form>').format(self.path).encode('utf-8') )
+
+        # Table header
         self.wfile.write( '<div id="ttable">'.encode('utf-8') )
         for f in DbaseField.flist:
             self.wfile.write('<div class="thead">{}</div>'.format(f.field).replace('_',' ').encode('utf-8') )             
@@ -462,6 +477,7 @@ class GetHandler(BaseHTTPRequestHandler):
             searchstate = SearchState({})
             CookieManager.SetSearch( self.cookie, searchstate )
 
+        # Table contents
         back = False
         for i in searchstate.list:
             print(i)
@@ -500,7 +516,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(nb,nd[0],nd[1])
         return blist
 
-    def _changescript( self ):
+    def FORMSCRIPT( self ):
         return '''
 <script>
 function Able(n,v) {
@@ -525,13 +541,17 @@ function DeleteRecord() {
     if ( x == true ) {
         d.setAttribute('type','submit');
         d.value = "Delete";
-        document.getElementBiId("mainform").submit();
+        document.getElementById("mainform").submit();
         }
 };</script>'''
 
-    def _scrollscript( self ):
+    def TABLESCRIPT( self ):
         return '''
 <script>
+function chooseFunction(id) {
+    document.getElementById("_ID").value = id;
+    document.getElementById("hidden").submit();
+    }
 </script>'''
 
     def _post_message( self, form ):
@@ -693,9 +713,15 @@ div.tcell0 {
     background-color:#0000A9;
     color:yellow;
 }
+.tcell0:hover {
+    background-color: grey;
+}
 div.tcell1 {
     background-color:#0000FF;
     color:yellow;
+}
+div.tcell1:hover {
+    background-color: grey;
 }
 '''.encode('utf-8') )
         self.wfile.write('#ttable {{ display: grid; grid-template-columns: Repeat({},auto);grid-column-gap:2px;background-color:#0000A9; }}'.format(len(DbaseField.flist)).encode('utf-8') )
