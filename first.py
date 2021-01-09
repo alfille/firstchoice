@@ -1067,17 +1067,17 @@ class SQL_table:
         # Create new table
         cls.field_list = field_list
         if ArgSQL > 0 :
-            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f+' TEXT' for f in field_list]) + ', _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)')
+            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) )
         cursor = cls.connection.cursor()
-        cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY,' + ','.join([f+' TEXT' for f in field_list]) + ', _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)') 
+        cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) ) 
 
     @classmethod    
     def AllDataGet( cls ):
         global ArgSQL
         if ArgSQL > 0:
-            print('SELECT ' + ','.join(cls.field_list) + ' FROM first')
+            print('SELECT {} FROM first'.format(','.join(cls.field_list) ) )
         cursor = cls.connection.cursor()
-        cursor.execute('SELECT ' + ','.join(cls.field_list) + ' FROM first')
+        cursor.execute('SELECT {} FROM first'.format(','.join(cls.field_list)) )
         return cursor.fetchall()
 
     @classmethod    
@@ -1085,9 +1085,9 @@ class SQL_table:
         global ArgSQL
         # Add all data
         if ArgSQL > 0:
-            print('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')',"<Full Data List>")
+            print('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*len(cls.field_list)))),"<Full Data List>")
         cursor = cls.connection.cursor()
-        cursor.executemany('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')', full_data_list )
+        cursor.executemany('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*len(cls.field_list)))), full_data_list )
         cls.connection.commit()
         cursor.execute('SELECT COUNT(_ID) FROM first' )
         cls.total = cursor.fetchone()[0]
@@ -1107,9 +1107,9 @@ class SQL_record(SQL_table):
         where, params = cls.where( search_dict )
         #print(where,params)
         if ArgSQL > 0:
-            print('SELECT _ID FROM first ' + where , params )
+            print('SELECT _ID FROM first {}'.format(where) , params )
         cursor = cls.connection.cursor()
-        return cursor.execute('SELECT _ID FROM first ' + where , params ).fetchall()
+        return cursor.execute('SELECT _ID FROM first {}'.format(where) , params ).fetchall()
 
     @classmethod
     def SortedSearchDict( cls, flist, search_dict ):
@@ -1119,11 +1119,14 @@ class SQL_record(SQL_table):
         # Searches using a dict of field criteria (blank ignored)
         where, params = cls.where( search_dict )
         #print(where,params)
-        fields = ','.join(flist)
+        if len(flist) == 0:
+            fields = ','.join(cls.field_list)
+        else:
+            fields = ','.join(flist)
         if ArgSQL > 0:
-            print('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,fields) , params )
+            print('SELECT _ID, {} FROM first {} ORDER BY {} '.format(where,fields,fields) , params )
         cursor = cls.connection.cursor()
-        return cursor.execute('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,fields), params ).fetchall()
+        return cursor.execute('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,where,fields), params ).fetchall()
 
     @classmethod
     def Search( cls, search_tuple ):
@@ -1162,9 +1165,9 @@ class SQL_record(SQL_table):
         # Create a new SQL record
         # return the new _ID
         if ArgSQL > 0:
-            print('INSERT INTO first (' + ','.join(cls.field_list) + ') VALUES ('+ ','.join(list('?'*len(cls.field_list))) + ')',data_tuple)
+            print('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*(len(cls.field_list)+1)))),data_tuple+(1,))
         cursor = cls.connection.cursor()
-        cursor.execute('INSERT INTO first (' + ','.join(cls.field_list) + ', _ADDED) VALUES ('+ ','.join(list('?'*(len(cls.field_list)+1))) + ')',data_tuple+(1,))
+        cursor.execute('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*(len(cls.field_list)+1)))),data_tuple+(1,))
         cls.connection.commit()
         cls.total += 1
         cls.added += 1
@@ -1175,9 +1178,9 @@ class SQL_record(SQL_table):
         global ArgSQL
         # Update an SQL record
         if ArgSQL > 0:
-            print('UPDATE first SET ' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+            print('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in cls.field_list])),data_tuple+(ID,) )
         cursor = cls.connection.cursor()
-        cursor.execute('UPDATE first SET ' + ','.join(['{}=?'.format(f) for f in cls.field_list]) + ', _CHANGED=1 WHERE _ID=?',data_tuple+(ID,) )
+        cursor.execute('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in cls.field_list])),data_tuple+(ID,) )
         cls.connection.commit()
         cursor.execute('SELECT COUNT(_ID) FROM first WHERE _CHANGED=1')
         cls.updated=cursor.fetchone()[0]
@@ -1206,9 +1209,9 @@ class SQL_record(SQL_table):
         if ID is None:
             return tuple( ' ' * len(cls.field_list))
         if ArgSQL > 0:
-            print('SELECT ' + ','.join(cls.field_list) + ' FROM first WHERE _ID=?',(ID,))
+            print('SELECT {} FROM first WHERE _ID=?'.format(','.join(cls.field_list)),(ID,))
         cursor = cls.connection.cursor()
-        cursor.execute('SELECT ' + ','.join(cls.field_list) + ' FROM first WHERE _ID=?',(ID,))
+        cursor.execute('SELECT {} FROM first WHERE _ID=?'.format(','.join(cls.field_list)),(ID,))
         return cursor.fetchone()
     
     @classmethod
