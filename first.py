@@ -928,7 +928,7 @@ class SQL_FOL_handler(FOL_handler):
         #print(SQL_record().Search( {'Color' : '..red..', "Region" : '..na..' } ) )
         
     def Fields( self ):
-        self.fields = [f['field'].replace(" ","_") for f in self.form['fields']]
+        self.fields = [SqlField(f['field']) for f in self.form['fields']]
         Print3(self.fields)
 
     def Insert( self, data_tuple ):
@@ -1117,6 +1117,11 @@ class SQL_record(SQL_table):
         # Search for a set of fields with the given criteria
         # return tuples of the field list ordered by field
         # Searches using a dict of field criteria (blank ignored)
+        #
+        # Note that return includes _ID as first field, but it isn't part of sort (of course)
+        #
+        # Also an empty field list defaults to all
+        #
         where, params = cls.where( search_dict )
         #print(where,params)
         if len(flist) == 0:
@@ -1344,6 +1349,12 @@ class DataRecordOut(RecordOut):
         cr = ba[2:].count(b'\r')
         struct.pack_into('>H',ba,0,len(ba)-2+cr)
         return ba
+
+def SqlField( field ):
+    return field.replace(' ','_')
+
+def PrintField( field ):
+    return field.replace('_',' ')
     
 
 if __name__ == '__main__':

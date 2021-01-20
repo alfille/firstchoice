@@ -113,12 +113,6 @@ class SearchState:
         # Not Zero-based
         return self._index + 1
 
-class TableState:
-    def __init__(self):
-        self.flist = DbaseField.flist
-        self.fields = [f.field.replace("_"," ") for f in DbaseField.flist]
-        
-
 class CookieManager:
     active_cookies = {}
 
@@ -138,10 +132,12 @@ class CookieManager:
             # time used to trim list
             # search is a SearchState object
             # last is prior formdict
+            # table is list of fields and sizes
             cls.active_cookies[session] = {
                 'time':datetime.time(),
                 'search':None,
                 'last' : {},
+                'table':[(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
             }
         return session
 
@@ -166,6 +162,16 @@ class CookieManager:
         session = cls.GetSession( cookie )
         #print("getlast",cls.active_cookies[session]['last'])
         return cls.active_cookies[session]['last']
+
+    @classmethod
+    def ResetTable( cls, cookie ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['table']=[(SqlField(f.field),"1fr") for f in DbaseField.flist]
+        
+    @classmethod
+    def GetTable( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['table']
         
 class DbaseField:
     # Convenience class to make finding field information easier
@@ -178,7 +184,7 @@ class DbaseField:
         cls.flist = [ DbaseField(f) for f in dbase_class.form['fields'] ]         
 
     def __init__(self,field):
-        self._field = field['field'].replace(' ','_')
+        self._field = first.SqlField(field['field'])
         self._length = field['length']
         text_wrap = field['textwrap']
         self._final = text_wrap._final
@@ -218,6 +224,7 @@ class GetHandler(BaseHTTPRequestHandler):
         'clear'    : ( '#E37791',  'Clear' ),
         'blank'    : ( '#0000A9', '' ),
         'id'       : ( '#000000', 'id' ),
+        'resize'   : ( '#000000', 'resize' ),
         }
      
     def _searchBar( self, formdict, searchstate ):
@@ -225,7 +232,7 @@ class GetHandler(BaseHTTPRequestHandler):
 
 
     def _statusBar( self, formdict, text=''  ):
-        self.wfile.write('<DIV id="head-grid">'.encode('utf-8') )
+        self.wfile.write('<DIV id="head-grid" class="firststyle">'.encode('utf-8') )
 
         self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(first.SQL_record.total).encode('utf-8') )
         self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(first.SQL_record.added).encode('utf-8') )
@@ -244,6 +251,7 @@ class GetHandler(BaseHTTPRequestHandler):
         if self.path == '/formstyle.css':
             return self.FORMCSS()
         elif self.path == '/tablestyle.css':
+            self._get_cookie()
             return self.TABLECSS()
         elif self.path == '/favicon.ico':
             return self.ICON()
@@ -267,6 +275,7 @@ class GetHandler(BaseHTTPRequestHandler):
         #self.wfile.write(('<pre>{}</pre>'.format(self._post_message(form))).encode('utf-8'))
 
         # Write the form (with headers)
+        print(self._get_message())
         self.PAGE( { field:form[field].value for field in form.keys() } )
     
     def PAGE( self, formdict ):
@@ -282,19 +291,47 @@ class GetHandler(BaseHTTPRequestHandler):
             formdict['button'] = "Edit"
         
         if formdict['button'] == type(self).buttondict['table'][1]:
-            self.wfile.write('<head><link href="/tablestyle.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
-            #self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
-            self.wfile.write(('<body><div class="firststyle">').encode('utf-8'))
+            if "table_type" in formdict:
+                ttype = formdict['table_type']
+                t0 = formdict['table_0']
+                t1 = formdict['table_1']
+                table = CookieManager.GetTable(self.cookie)
+                if ttype == "reset":
+                    CookieManager.ResetTable( self.cookie )
+                elif ttype == "resize":
+                    table[t0][1] = t1
+                elif ttype == "remove":
+                    if len(table) > 1:
+                        del( table[t0] )
+                elif ttype == "move":
+                    # from 0 to before 1
+                    t0 = int(t0)
+                    t1 = int(t1)
+                    e = table[t0]
+                    table.remove(e)
+                    table.insert(t1,e)
+                elif ttype == "restore":
+                    table.append( (t0,"1fr") )
+                    
+            self.wfile.write('<head>'\
+                '<link href="/tablestyle.css" rel="stylesheet" type="text/css">'\
+                '</head>'.encode('utf-8'))
+            self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
+            self.wfile.write('<body>'.encode('utf-8') )
             self.TABLE()
+
         else:
-            self.wfile.write('<head><link href="/formstyle.css" rel="stylesheet" type="text/css"></head>'.encode('utf-8'))
-            self.wfile.write(('<body><div class="firststyle">').encode('utf-8'))
+            self.wfile.write('<head>'\
+                '<link href="/formstyle.css" rel="stylesheet" type="text/css">'\
+                '</head>'.encode('utf-8'))
             if formdict['button'] == type(self).buttondict['reset'][1]:
                 formdict = CookieManager.GetLast(self.cookie)
                 formdict['button'] = 'Edit' # No infinite loop
+            self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
+            self.wfile.write('<body>'.encode('utf-8'))
             self.FORM( formdict )
 
-        self.wfile.write(('</div></body>').encode('utf-8'))
+        self.wfile.write('</body>'.encode('utf-8'))
 
     def FORM( self, formdict ):
         # After a "POST" --- clicking one of the submit buttons
@@ -442,35 +479,74 @@ class GetHandler(BaseHTTPRequestHandler):
         first.SQL_record.PadFields( formdict )
 
         self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
-        #self.wfile.write( ('<form action="{}" method="post" id="mainform"><table width=100%>').format(self.path).encode('utf-8') )
-        self.wfile.write( ('<form action="{}" method="post" id="mainform"><div id="form-grid">').format(self.path).encode('utf-8') )
+        print("PATH",self.path)
+        self.wfile.write('<form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
-            self.wfile.write( ('<input type="hidden" name="_ID" value="{}" >').format(formdict['_ID']).encode('utf-8') )
+            self.wfile.write( '<input type="hidden" name="_ID" value="{}" >'.format(formdict['_ID']).encode('utf-8') )
+        self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
         for f in DbaseField.flist:
             self._textfield( f,formdict[f.field] )
-        self.wfile.write( ('<div class="lcellb">{}</div><div class="rcell">{}</div>').format(self._tablebutton(),self._buttons(actbut,deactbut)).encode('utf-8') )
+        self.wfile.write(
+            '<div class="lcellb">{}</div>'\
+            '<div class="rcellb">{}</div>'.format(self._tablebutton(),self._buttons(actbut,deactbut)).encode('utf-8') )
         self.wfile.write( ('</div></form>').encode('utf-8') )
         
     def _textfield( self, datafield, fval ):
         # part of form
-        #print("textfield",datafield,datafield.field,fval)
-        self.wfile.write( '<div class="lcell"><label for="{}" class="texta"> {}: </label></div>'.format(datafield.field,datafield.field.replace("_"," ")).encode('utf-8') ) 
+        self.wfile.write(
+            '<div class="lcell">'\
+            '<label for="{}" class="texta"> {}: </label>'\
+            '</div>'.format(datafield.field,first.PrintField(datafield.field)).encode('utf-8') ) 
         if datafield.final:
-            self.wfile.write( ('<div class="rcell"><textarea rows=6 cols=78 name=\"{}\" id=\"{}\ autocomplete="on" autocapitalize="none" oninput="ChangeData()">'.format(datafield.field,datafield.field,) + fval + '</textarea></div>').encode('utf-8') ) 
+            self.wfile.write(
+                '<div class="rcell">'\
+                '<textarea rows=6 cols=78 name="{}" id="{}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'\
+                '{}</textarea>'\
+                '</div>'.format(datafield.field,first.PrintField(datafield.field),fval).encode('utf-8') ) 
         else:
-            self.wfile.write( ('<div class="rcell"><textarea rows={} cols=78 name=\"{}\" id=\"{}\ maxlength={}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines) + fval + '</textarea></div>').encode('utf-8') ) 
+            self.wfile.write(
+                '<div class="rcell">'\
+                '<textarea rows={} cols=78 name="{}" id="{}" maxlength={} autocomplete="on" autocapitalize="none" oninput="ChangeData()">'\
+                '{}</textarea>'\
+                '</div>'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') ) 
         
     def TABLE( self ):
 
         # script
         self.wfile.write(self.TABLESCRIPT().encode('utf-8') )
-        # hidden form
-        self.wfile.write( ('<form action="{}" method="post" id="hidden"><input type="hidden" name="_ID" id="_ID"><input type="hidden" name="button" value="id"></form>').format(self.path).encode('utf-8') )
+        
+        # hidden form choose a line for FORM
+        self.wfile.write(
+            '<form action={} method="post" id="ID">'\
+            '<input type="hidden" name="_ID" id="_ID">'\
+            '<input type="hidden" name="button" value="id">'\
+            '</form>'.format(self.path).encode('utf-8') )
+
+        # hidden form resize etc.. for replot TABLE
+        print("PATH",self.path)
+        self.wfile.write(
+            '<form action={} method="post" id="table_back">'\
+            '<input type="hidden" name="table_type" id="table_type" value="0">'\
+            '<input type="hidden" name="table_0" id="table_0" value="0">'\
+            '<input type="hidden" name="table_1" id="table_1" value="0">'\
+            '<input type="hidden" name="button" value="{}">'\
+            '</form>'.format(self.path,type(self).buttondict['table'][1]).encode('utf-8') )
+
+        # Status and menu
+        self.wfile.write(
+            '<div id="tstatus">'\
+            '<button id="bhead" onClick="menuFunction()">Menu...</button>'\
+            '<span id="status"></span>'\
+            '</div>'.encode('utf-8') )
 
         # Table header
-        self.wfile.write( '<div id="ttable">'.encode('utf-8') )
-        for f in DbaseField.flist:
-            self.wfile.write('<div class="thead">{}</div>'.format(f.field).replace('_',' ').encode('utf-8') )             
+        table = CookieManager.GetTable(self.cookie)
+        self.wfile.write( '<div class="ttable">'.encode('utf-8') )
+        for i,f in enumerate(table):
+            self.wfile.write(
+                '<div class="thead" onResize="fResize({})" ondrop="drop(event,{})" ondragover="allowDrop(event)">'\
+                '<span class="shead" draggable="true">{}</span>'\
+                '</div>'.format(i,i,first.PrintField(table[i][0])).encode('utf-8') )
 
         searchstate = CookieManager.GetSearch(self.cookie)
         if searchstate is None or searchstate.length==0:
@@ -479,11 +555,16 @@ class GetHandler(BaseHTTPRequestHandler):
 
         # Table contents
         back = False
-        for i in searchstate.list:
-            print(i)
+
+        full_list = first.SQL_record.SortedSearchDict( [f[0] for f in table], searchstate.last_dict )
+        for r in full_list:
+            i = r[0]
             back = not back
-            for f in first.SQL_record.FindID( i ):
-                self.wfile.write( '<div class="{}" onClick="chooseFunction({})">{}</div>'.format("tcell0" if back else "tcell1",i, f).encode('utf-8') ) 
+            for f in r[1:] :
+                self.wfile.write(
+                    '<div class="{}" onClick="chooseFunction({})">'\
+                    '{}'\
+                    '</div>'.format("tcell0" if back else "tcell1",i, f).encode('utf-8') ) 
 
         self.wfile.write( '</div>'.encode('utf-8') ) 
         
@@ -550,9 +631,50 @@ function DeleteRecord() {
 <script>
 function chooseFunction(id) {
     document.getElementById("_ID").value = id;
-    document.getElementById("hidden").submit();
+    document.getElementById("ID").submit();
     }
-</script>'''
+function menuFunction() {
+    var popup = document.getElementById("myPopup");
+    popup.classList.toggle("show");
+    }
+function fResize( indx ) {
+    document.getElementById("table_type").value = "resize";
+    document.getElementById("table_0").value = indx;
+    document.getElementById("table_1").value = this.outerWidth;
+    document.getElementById("table_back").submit();
+    }
+function fMove( from, to ) {
+    document.getElementById("table_type").value = "move";
+    document.getElementById("table_0").value = from;
+    document.getElementById("table_1").value = to;
+    document.getElementById("table_back").submit();
+    }
+function fRemove( indx ) {
+    document.getElementById("table_type").value = "move";
+    document.getElementById("table_0").value = indx;
+    document.getElementById("table_back").submit();
+    }
+function fRestore( field ) {
+    document.getElementById("table_type").value = "restore";
+    document.getElementById("table_0").value = field;
+    document.getElementById("table_back").submit();
+    }
+function fReset( ) {
+    document.getElementById("table_type").value = "reset";
+    document.getElementById("table_back").submit();
+    }
+function drop(event,to) {
+    event.preventDefault();
+    var data = event.dataTransfer.getData("Text");
+    var from = 1 ;
+    /*document.getElementById("demo").innerHTML += "The p element was dropped";*/
+    fMove( from, to ) ;
+    }
+
+function allowDrop(event) {
+    event.preventDefault();
+}
+    </script>'''
 
     def _post_message( self, form ):
         message_parts = [
@@ -608,7 +730,7 @@ function chooseFunction(id) {
             self.send_header("Set-Cookie", self.cookie[morsel].OutputString())
 
         self.end_headers()
-    
+
     def FORMCSS( self ):
         # Begin the response
         self.send_response(200)
@@ -646,11 +768,11 @@ textarea, input {
     color: #CC00CC;
     grid-gap: 6px;
 }
-div.hcell {
+.hcell {
     background-color:#0000A9;
     color: #00A9A9;
 }    
-div.hcellbig {
+.hcellbig {
     background-color:#0000A9;
     color: #00A9A9;
     grid-column-start: 2;
@@ -658,20 +780,26 @@ div.hcellbig {
 }    
 #form-grid {
     display: grid;
-    grid-template-columns: auto 80em;
+    grid-template-columns: 1fr 80em;
     background-color:#0000A9;
 }
-div.lcell {
+.lcell {
     background-color: #00A9A9;
     color:black;
     text-align: right;
 }
-div.rcell {
+.lcellb {
+    background-color: #00A9A9;
+    color:black;
+    text-align: left;
+    vertical-align: bottom;
+}
+.rcell {
     background-color:#0000A9;
     color:black;
     text-align: left;
 }
-dev.lcellb {
+.lcellb {
     background-color: #00A9A9;
     color:black;
     text-align: left;
@@ -701,31 +829,105 @@ body {
     font-variant: normal;
     text-transform: none;
     }
-div.thead {
+#tstatus {
+    background-color:#0000A9;
+    color: white;
+    z-index: 10;
+    top: 0;
+    position: sticky;
+}    
+#bhead {
+    background-color: #00FFCC;
+    border-color: white;
+    border-style: groove;
+    height: 100%
+    position: sticky;
+}
+.thead {
     background-color: #00A9A9;
     color:black;
     resize: horizontal;
+    vertical-align: top;
     overflow: auto;
-    top: 0;
+    z-index: 10;
+    top: 1.2em;
+    position: -webkit-sticky;
     position: sticky;
 }
-div.tcell0 {
+.shead {
+    position: sticky;
+}
+.tcell0 {
     background-color:#0000A9;
+}
+.tcell1 {
+    background-color:#0000D9;
+}
+.tcell0, .tcell1 {
     color:yellow;
+    max-height: 5em;
+    position: relative;
+    resize: horizontal;
+    z-index: 0;
 }
-.tcell0:hover {
-    background-color: grey;
-}
-div.tcell1 {
-    background-color:#0000FF;
-    color:yellow;
-}
-div.tcell1:hover {
+.tcell0:hover, .tcell1:hover {
     background-color: grey;
 }
 '''.encode('utf-8') )
-        self.wfile.write('#ttable {{ display: grid; grid-template-columns: Repeat({},auto);grid-column-gap:2px;background-color:#0000A9; }}'.format(len(DbaseField.flist)).encode('utf-8') )
-        
+        table = CookieManager.GetTable( self.cookie )
+        self.wfile.write(
+            '.ttable {{'\
+                'display: grid; '\
+                'grid-template-columns: {};'\
+                'grid-column-gap:2px;'\
+                'background-color:#0000A9; '\
+                '}}'.format(' '.join([f[1] for f in table])).encode('utf-8') )
+        self.wfile.write('''
+/* Popup container - can be anything you want */
+.popup {
+  position: absolute;
+  display: inline-block;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* The actual popup */
+.popup .popuptext {
+  visibility: hidden;
+  width: 160px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px 0;
+  position: absolute;
+  z-index: 10;
+  top: 0px
+  left: 0px;
+}
+
+/* Toggle this class - hide and show the popup */
+.popup .show {
+  visibility: visible;
+  -webkit-animation: fadeIn 1s;
+  animation: fadeIn 1s;
+}
+
+/* Add animation (fade in the popup) */
+@-webkit-keyframes fadeIn {
+  from {opacity: 0;} 
+  to {opacity: 1;}
+}
+
+@keyframes fadeIn {
+  from {opacity: 0;}
+  to {opacity:1 ;}
+}
+        '''.encode('utf-8') )
+
     def ICON( self ):
         self.send_response(200)
         self.send_header('Content-Type',
