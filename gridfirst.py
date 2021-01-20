@@ -545,8 +545,8 @@ class GetHandler(BaseHTTPRequestHandler):
         for i,f in enumerate(table):
             self.wfile.write(
                 '<div class="thead" onResize="fResize({})" ondrop="drop(event,{})" ondragover="allowDrop(event)">'\
-                '<span class="shead" draggable="true">{}</span>'\
-                '</div>'.format(i,i,first.PrintField(table[i][0])).encode('utf-8') )
+                '<span class="shead" draggable="true" onDragStart="dragStart(event,{})" onDragEnd="dragEnd(event)">{}</span>'\
+                '</div>'.format(i,i,i,first.PrintField(table[i][0])).encode('utf-8') )
 
         searchstate = CookieManager.GetSearch(self.cookie)
         if searchstate is None or searchstate.length==0:
@@ -665,12 +665,16 @@ function fReset( ) {
     }
 function drop(event,to) {
     event.preventDefault();
-    var data = event.dataTransfer.getData("Text");
-    var from = 1 ;
-    /*document.getElementById("demo").innerHTML += "The p element was dropped";*/
-    fMove( from, to ) ;
+    var from = event.dataTransfer.getData("Text");
+    fMove( from, to.toString() ) ;
     }
-
+function dragStart(event,n) {
+    document.getElementById("status").innerHTML = "Moving a column position"
+    event.dataTransfer.setData("text",n.toString())
+    }
+function dragEnd(event) {
+    document.getElementById("status").innerHTML = ""
+    }
 function allowDrop(event) {
     event.preventDefault();
 }
