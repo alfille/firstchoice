@@ -532,11 +532,15 @@ class GetHandler(BaseHTTPRequestHandler):
             '<input type="hidden" name="button" value="{}">'\
             '</form>'.format(self.path,type(self).buttondict['table'][1]).encode('utf-8') )
 
+        # Flex container
+        self.wfile.write('<div id="tableflex">'.encode('utf-8') )        
+
         # Status and menu
         self.wfile.write(
             '<div id="tstatus">'\
             '<button id="bhead" onClick="menuFunction()">Menu...</button>'\
             '<span id="status"></span>'\
+            '<div id="tabledialog">Lots of stuff!</div>'\
             '</div>'.encode('utf-8') )
 
         # Table header
@@ -567,7 +571,9 @@ class GetHandler(BaseHTTPRequestHandler):
                     '</div>'.format("tcell0" if back else "tcell1",i, f).encode('utf-8') ) 
 
         self.wfile.write( '</div>'.encode('utf-8') ) 
-        
+
+        # End Flex container
+        self.wfile.write('</div>'.encode('utf-8') )        
         
     def _tablebutton( self ):
         b = 'table'
@@ -833,20 +839,32 @@ body {
     font-variant: normal;
     text-transform: none;
     }
+#tabledialog {
+    visibility: hidden;
+    background-color: aqua;
+    color: black;
+    top: 0px;
+    left: 0px;
+    z-index: 1000;
+    }
+#tableflex {
+    display: flex;
+    flex-direction: column;
+    }
 #tstatus {
     background-color:#0000A9;
     color: white;
     z-index: 10;
     top: 0;
     position: sticky;
-}    
+    }    
 #bhead {
     background-color: #00FFCC;
     border-color: white;
     border-style: groove;
     height: 100%
     position: sticky;
-}
+    }
 .thead {
     background-color: #00A9A9;
     color:black;
@@ -854,10 +872,10 @@ body {
     vertical-align: top;
     overflow: auto;
     z-index: 10;
-    top: 1.2em;
+    top: 0;
     position: -webkit-sticky;
     position: sticky;
-}
+    }
 .shead {
     position: sticky;
 }
@@ -881,8 +899,9 @@ body {
         table = CookieManager.GetTable( self.cookie )
         self.wfile.write(
             '.ttable {{'\
-                'display: grid; '\
+                'display: inline-grid; '\
                 'grid-template-columns: {};'\
+                'top: 1.3em; left:0;'\
                 'grid-column-gap:2px;'\
                 'background-color:#0000A9; '\
                 '}}'.format(' '.join([f[1] for f in table])).encode('utf-8') )
@@ -908,7 +927,7 @@ body {
   border-radius: 6px;
   padding: 8px 0;
   position: absolute;
-  z-index: 10;
+  z-index: 100;
   top: 0px
   left: 0px;
 }
