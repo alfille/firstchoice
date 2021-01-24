@@ -166,7 +166,7 @@ class CookieManager:
     @classmethod
     def ResetTable( cls, cookie ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table']=[(SqlField(f.field),"1fr") for f in DbaseField.flist]
+        cls.active_cookies[session]['table']=[(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
         
     @classmethod
     def GetTable( cls, cookie ):
@@ -293,6 +293,7 @@ class GetHandler(BaseHTTPRequestHandler):
         if formdict['button'] == type(self).buttondict['table'][1]:
             if "table_type" in formdict:
                 ttype = formdict['table_type']
+                print("TABLE TYPE: ",ttype)
                 t0 = formdict['table_0']
                 t1 = formdict['table_1']
                 table = CookieManager.GetTable(self.cookie)
@@ -303,6 +304,19 @@ class GetHandler(BaseHTTPRequestHandler):
                 elif ttype == "remove":
                     if len(table) > 1:
                         del( table[t0] )
+                elif ttype == "select":
+                    print(t0)
+                    nlist = t0.split(',')
+                    if len(nlist) > 0:
+                        flist = [f[0] for f in table]
+                        # Add new fields
+                        for n in nlist:
+                            if n not in flist:
+                                table.append( (n,"1fr") )
+                        # Remove extra fields (back to front)
+                        for i in range(len(table)-1,-1,-1):
+                            if table[i][0] not in nlist:
+                                del(table[i])
                 elif ttype == "move":
                     # from 0 to before 1
                     t0 = int(t0)
@@ -512,6 +526,9 @@ class GetHandler(BaseHTTPRequestHandler):
         
     def TABLE( self ):
 
+        # Get field list
+        table = CookieManager.GetTable(self.cookie)
+
         # script
         self.wfile.write(self.TABLESCRIPT().encode('utf-8') )
         
@@ -523,7 +540,6 @@ class GetHandler(BaseHTTPRequestHandler):
             '</form>'.format(self.path).encode('utf-8') )
 
         # hidden form resize etc.. for replot TABLE
-        print("PATH",self.path)
         self.wfile.write(
             '<form action={} method="post" id="table_back">'\
             '<input type="hidden" name="table_type" id="table_type" value="0">'\
@@ -533,18 +549,35 @@ class GetHandler(BaseHTTPRequestHandler):
             '</form>'.format(self.path,type(self).buttondict['table'][1]).encode('utf-8') )
 
         # Flex container
-        self.wfile.write('<div id="tableflex">'.encode('utf-8') )        
+        self.wfile.write('<div class="tallflex">'.encode('utf-8') )        
 
+        #dialog (hidden)
+        flist = [f[0] for f in table]
+        checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,first.PrintField(f)) for f in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,first.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
+        self.wfile.write(
+            '<div id="tabledialog">'\
+                '<div class="wideflex">'\
+                    '<div class="tallflex">'\
+                    '<fieldset><legend>Choose fields shown</legend>'\
+                    '{}'\
+                    '<button type="button" onClick="fSelect()" class="dialogbutton">Save</button>'\
+                    '</div>'\
+                    '<div class="tallflex">'\
+                    '<button type="button" onClick="fReset()" class="dialogbutton">Reset Fields</button>'\
+                    '<button type="button" onClick="hideDialog()" class="dialogbutton">Cancel</button>'\
+                    '</fieldset></div>'\
+                '</div>'\
+            '</div>'.format('<br>'.join([checked,unchecked])).encode('utf-8') )
+        
         # Status and menu
         self.wfile.write(
             '<div id="tstatus">'\
-            '<button id="bhead" onClick="menuFunction()">Menu...</button>'\
+            '<button id="bhead" onClick="showDialog()">Menu...</button>'\
             '<span id="status"></span>'\
-            '<div id="tabledialog">Lots of stuff!</div>'\
             '</div>'.encode('utf-8') )
 
         # Table header
-        table = CookieManager.GetTable(self.cookie)
         self.wfile.write( '<div class="ttable">'.encode('utf-8') )
         for i,f in enumerate(table):
             self.wfile.write(
@@ -639,10 +672,6 @@ function chooseFunction(id) {
     document.getElementById("_ID").value = id;
     document.getElementById("ID").submit();
     }
-function menuFunction() {
-    var popup = document.getElementById("myPopup");
-    popup.classList.toggle("show");
-    }
 function fResize( indx ) {
     document.getElementById("table_type").value = "resize";
     document.getElementById("table_0").value = indx;
@@ -655,9 +684,13 @@ function fMove( from, to ) {
     document.getElementById("table_1").value = to;
     document.getElementById("table_back").submit();
     }
-function fRemove( indx ) {
-    document.getElementById("table_type").value = "move";
-    document.getElementById("table_0").value = indx;
+function fSelect( indx ) {
+    document.getElementById("table_type").value = "select";
+    let values = [];
+    document.querySelectorAll(`input[name="dfield"]:checked`).forEach((checkbox) => {
+        values.push(checkbox.value);
+    });
+    document.getElementById("table_0").value = values;
     document.getElementById("table_back").submit();
     }
 function fRestore( field ) {
@@ -684,6 +717,13 @@ function dragEnd(event) {
 function allowDrop(event) {
     event.preventDefault();
 }
+function showDialog() {
+    document.getElementById("tabledialog").style.display = "block";
+}
+function hideDialog() {
+    document.getElementById("tabledialog").style.display = "none";
+}
+
     </script>'''
 
     def _post_message( self, form ):
@@ -749,7 +789,8 @@ function allowDrop(event) {
         self.end_headers()
         self.wfile.write('''
 body {
-    font-size: 100%
+    font-size: 100%;
+    background: #0000A9;
     }
 .firststyle {
     background-color:#0000A9;
@@ -814,7 +855,8 @@ textarea, input {
     color:black;
     text-align: left;
     vertical-align: bottom;
-}'''.encode('utf-8') )
+}
+'''.encode('utf-8') )
                 
     def TABLECSS( self ):
         # Begin the response
@@ -824,7 +866,8 @@ textarea, input {
         self.end_headers()
         self.wfile.write('''
 body {
-    font-size: 100%
+    font-size: 100%;
+    margin: 0px;
     }
 .firststyle {
     background-color:#0000A9;
@@ -840,16 +883,35 @@ body {
     text-transform: none;
     }
 #tabledialog {
-    visibility: hidden;
-    background-color: aqua;
-    color: black;
-    top: 0px;
-    left: 0px;
-    z-index: 1000;
-    }
-#tableflex {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1000; /* Sit on top */
+  padding-top: 4em; /* Location of the box */
+  left: 8px;
+  top: 8px;
+  /*width: 100%; */ /* Full width */
+  /*height: 100%; */ /* 0 -> Full height */
+  overflow: auto; /* Enable scroll if needed */
+  color: black;
+  outline: 8px ridge threedface;
+  background-color: rgb(0,255,255); /* Fallback color */
+  background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
+}
+.dialogbutton {
+    padding: 1em;
+    font-size: 1em;
+    background-color: darkgrey;
+    color: white;
+    margin: 10px;
+}
+.tallflex {
     display: flex;
     flex-direction: column;
+    }
+.wideflex {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
     }
 #tstatus {
     background-color:#0000A9;
@@ -872,7 +934,7 @@ body {
     vertical-align: top;
     overflow: auto;
     z-index: 10;
-    top: 0;
+    top: 1.3em;
     position: -webkit-sticky;
     position: sticky;
     }
@@ -905,51 +967,6 @@ body {
                 'grid-column-gap:2px;'\
                 'background-color:#0000A9; '\
                 '}}'.format(' '.join([f[1] for f in table])).encode('utf-8') )
-        self.wfile.write('''
-/* Popup container - can be anything you want */
-.popup {
-  position: absolute;
-  display: inline-block;
-  cursor: pointer;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* The actual popup */
-.popup .popuptext {
-  visibility: hidden;
-  width: 160px;
-  background-color: #555;
-  color: #fff;
-  text-align: center;
-  border-radius: 6px;
-  padding: 8px 0;
-  position: absolute;
-  z-index: 100;
-  top: 0px
-  left: 0px;
-}
-
-/* Toggle this class - hide and show the popup */
-.popup .show {
-  visibility: visible;
-  -webkit-animation: fadeIn 1s;
-  animation: fadeIn 1s;
-}
-
-/* Add animation (fade in the popup) */
-@-webkit-keyframes fadeIn {
-  from {opacity: 0;} 
-  to {opacity: 1;}
-}
-
-@keyframes fadeIn {
-  from {opacity: 0;}
-  to {opacity:1 ;}
-}
-        '''.encode('utf-8') )
 
     def ICON( self ):
         self.send_response(200)
