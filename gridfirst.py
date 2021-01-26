@@ -44,6 +44,16 @@ except:
     
 import first
 
+try:
+    import textwrap
+except:
+    print("Please install the textwrap module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+
+# Connection to persistent database
+persistent = None
+
 class SearchState:
     def __init__(self, dictionary):
         self._last_dict = self.FieldDict( dictionary )
@@ -129,15 +139,24 @@ class CookieManager:
                 t = sorted([ v['time'] for v in cls.active_cookies.values() ])[30]
                 cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
 
+            global persistent
+            ps = persistent.GetSearch("default")
+            ts = persistent.GetTable("default")
+            if ts is None:
+                ts = [(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
+                persistent.SetTable( "default", ts )
+
             # time used to trim list
             # search is a SearchState object
             # last is prior formdict
             # table is list of fields and sizes
             cls.active_cookies[session] = {
                 'time':datetime.time(),
-                'search':None,
+                'search':ps,
                 'last' : {},
-                'table':[(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
+                'table':ts,
+                'current': { 'search':'default', 'table':'default', },
+                'modified': { 'search':False, 'table':False, },
             }
         return session
 
@@ -172,6 +191,48 @@ class CookieManager:
     def GetTable( cls, cookie ):
         session = cls.GetSession( cookie )
         return cls.active_cookies[session]['table']
+        
+    @classmethod
+    def GetTableName( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['current']['table']
+        
+    @classmethod
+    def SetTableName( cls, cookie, name ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['current']['table'] = name
+        cls.active_cookies[session]['modified']['table'] = False
+        
+    @classmethod
+    def SetTableMod( cls, cookie ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['modified']['table'] = True
+        
+    @classmethod
+    def GetTableMod( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['modified']['table']
+        
+    @classmethod
+    def GetSearchName( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['current']['search']
+        
+    @classmethod
+    def SetSearchName( cls, cookie, name ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['current']['search'] = name
+        cls.active_cookies[session]['modified']['search'] = False
+        
+    @classmethod
+    def SetSearchMod( cls, cookie ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['modified']['search'] = True
+        
+    @classmethod
+    def GetSearchMod( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['modified']['search']
         
 class DbaseField:
     # Convenience class to make finding field information easier
@@ -212,8 +273,10 @@ class DbaseField:
 class GetHandler(BaseHTTPRequestHandler):
     buttondict = {
         'reset'    : ( '#EDA9FB', 'Reset entries' ),
-        'table'    : ( '#8CD7EE', 'Table view' ),
+        'table'    : ( '#CCCC00', 'Table view' ),
         'search'   : ( '#8CD7EE', 'Search' ),
+        'savesearch': ( '#8CD7EE', 'Save search' ),
+        'getsearch': ( '#8CD7EE', 'Get search' ),
         'research' : ( '#8CD7EE', 'Modify search' ),
         'next'     : ( '#8CD7EE', 'Next' ),
         'back'     : ( '#8CD7EE', 'Back' ),
@@ -493,30 +556,42 @@ class GetHandler(BaseHTTPRequestHandler):
         first.SQL_record.PadFields( formdict )
 
         self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
-        print("PATH",self.path)
-        self.wfile.write('<form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
+        self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
             self.wfile.write( '<input type="hidden" name="_ID" value="{}" >'.format(formdict['_ID']).encode('utf-8') )
+
+        
+        # Fields
         self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
         for f in DbaseField.flist:
             self._textfield( f,formdict[f.field] )
-        self.wfile.write(
-            '<div class="lcellb">{}</div>'\
-            '<div class="rcellb">{}</div>'.format(self._tablebutton(),self._buttons(actbut,deactbut)).encode('utf-8') )
-        self.wfile.write( ('</div></form>').encode('utf-8') )
+        self.wfile.write( ('</div>').encode('utf-8') )
+
+        # Buttons
+        self.wfile.write('<div id=buttons>{}</div>'.format(self._buttons(actbut,deactbut)).encode('utf-8') )
+        self.wfile.write( ('</form>').encode('utf-8') )
         
     def _textfield( self, datafield, fval ):
         # part of form
         self.wfile.write(
             '<div class="lcell">'\
-            '<label for="{}" class="texta"> {}: </label>'\
-            '</div>'.format(datafield.field,first.PrintField(datafield.field)).encode('utf-8') ) 
+            '<label for="{}" class="texta">{}:</label>'\
+            '</div>'.format(datafield.field,first.PrintField(datafield.field[:10])).encode('utf-8') ) 
         if datafield.final:
             self.wfile.write(
                 '<div class="rcell">'\
                 '<textarea rows=6 cols=78 name="{}" id="{}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'\
                 '{}</textarea>'\
-                '</div>'.format(datafield.field,first.PrintField(datafield.field),fval).encode('utf-8') ) 
+                '</div>'.format(datafield.field,first.PrintField(datafield.field),fval).encode('utf-8') )
+        elif len(fval) > 0:
+            lines = len(fval.split('\n'))
+            if lines < datafield.lines:
+                lines = datafield.lines
+            self.wfile.write(
+                '<div class="rcell">'\
+                '<textarea rows={} cols=78 name="{}" id="{}" maxlength={} autocomplete="on" autocapitalize="none" oninput="ChangeData()">'\
+                '{}</textarea>'\
+                '</div>'.format(lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') )              
         else:
             self.wfile.write(
                 '<div class="rcell">'\
@@ -557,6 +632,7 @@ class GetHandler(BaseHTTPRequestHandler):
         unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,first.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
         self.wfile.write(
             '<div id="tabledialog">'\
+                '<h2>Table format: {}{}</h2>'\
                 '<div class="wideflex">'\
                     '<div class="tallflex">'\
                     '<fieldset><legend>Choose fields shown</legend>'\
@@ -568,7 +644,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     '<button type="button" onClick="hideDialog()" class="dialogbutton">Cancel</button>'\
                     '</fieldset></div>'\
                 '</div>'\
-            '</div>'.format('<br>'.join([checked,unchecked])).encode('utf-8') )
+            '</div>'.format(CookieManager.GetSearchName(self.cookie)," (modified)" if CookieManager.GetTableMod(self.cookie) else "",'<br>'.join([checked,unchecked])).encode('utf-8') )
         
         # Status and menu
         self.wfile.write(
@@ -608,32 +684,18 @@ class GetHandler(BaseHTTPRequestHandler):
         # End Flex container
         self.wfile.write('</div>'.encode('utf-8') )        
         
-    def _tablebutton( self ):
-        b = 'table'
-        d = type(self).buttondict[b]
-        return '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(b,d[0],d[1])
-        
     def _buttons( self, active_buttons, disabled_buttons ):
         blist=''
         bd = type(self).buttondict
-        nb = 'blank'
-        nd = bd[nb]
-        for b in ['search','next','back','research','blank','reset','copy','add','save','delete','blank','clear']:
-            d = bd[b]
-            if b == 'delete':
-                if b in active_buttons:
-                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}">'.format(b,d[0],d[1])
-                elif b in disabled_buttons:
-                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}" disabled>'.format(b,d[0],d[1])
+        for bl in [['Table','table',],['Search','search','next','back','research',],['Form','reset','clear',],['Record','copy','add','save','delete'],]:
+            blist += '<fieldset><legend>{}</legend>'.format(bl[0])
+            for b in bl[1:]:
+                d = bd[b]
+                if b == 'delete':
+                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}" {}>'.format(b,d[0],d[1],"disabled" if b in disabled_buttons else "")
                 else:
-                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(nb,nd[0],nd[1])
-            else:
-                if b in active_buttons:
-                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}">'.format(b,d[0],d[1])
-                elif b in disabled_buttons:
-                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(b,d[0],d[1])
-                else:
-                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" disabled>'.format(nb,nd[0],nd[1])
+                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" {}>'.format(b,d[0],d[1],"disabled" if b in disabled_buttons else "")
+            blist += '</fieldset>'
         return blist
 
     def FORMSCRIPT( self ):
@@ -795,7 +857,7 @@ body {
 .firststyle {
     background-color:#0000A9;
     font-family: "Lucida Console", Monaco, monospace;
-    font-size: 1.5em;
+    font-size: 1.5rem;
     letter-spacing: 2px;
     word-spacing: 2px;
     color: #A9A9A9;
@@ -810,7 +872,7 @@ body {
     color:black;
     }
 textarea, input {
-    font-size: 1.0em;
+    font-size: 1.5rem;
     }
 #head-grid {
     display: grid;
@@ -831,7 +893,7 @@ textarea, input {
 }    
 #form-grid {
     display: grid;
-    grid-template-columns: 1fr 80em;
+    grid-template-columns: 13rem 80rem;
     background-color:#0000A9;
 }
 .lcell {
@@ -839,22 +901,16 @@ textarea, input {
     color:black;
     text-align: right;
 }
-.lcellb {
+#buttons {
+    display: flex;
+    width: 100%;
     background-color: #00A9A9;
     color:black;
     text-align: left;
     vertical-align: bottom;
 }
-.rcell {
-    background-color:#0000A9;
-    color:black;
-    text-align: left;
-}
-.lcellb {
-    background-color: #00A9A9;
-    color:black;
-    text-align: left;
-    vertical-align: bottom;
+input[type="button"], input[type="submit"]  {
+    border-radius: 8px;
 }
 '''.encode('utf-8') )
                 
@@ -872,7 +928,7 @@ body {
 .firststyle {
     background-color:#0000A9;
     font-family: "Lucida Console", Monaco, monospace;
-    font-size: 1.5em;
+    font-size: 1.5rem;
     letter-spacing: 2px;
     word-spacing: 2px;
     color: #A9A9A9;
@@ -886,7 +942,7 @@ body {
   display: none; /* Hidden by default */
   position: fixed; /* Stay in place */
   z-index: 1000; /* Sit on top */
-  padding-top: 4em; /* Location of the box */
+  padding-top: 1rem; /* Location of the box */
   left: 8px;
   top: 8px;
   /*width: 100%; */ /* Full width */
@@ -898,11 +954,12 @@ body {
   background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
 }
 .dialogbutton {
-    padding: 1em;
-    font-size: 1em;
+    padding: 1rem;
+    font-size: 1rem;
     background-color: darkgrey;
     color: white;
     margin: 10px;
+    border-radius: 8px;
 }
 .tallflex {
     display: flex;
@@ -934,7 +991,7 @@ body {
     vertical-align: top;
     overflow: auto;
     z-index: 10;
-    top: 1.3em;
+    top: 1.3rem;
     position: -webkit-sticky;
     position: sticky;
     }
@@ -949,7 +1006,7 @@ body {
 }
 .tcell0, .tcell1 {
     color:yellow;
-    max-height: 5em;
+    max-height: 5rem;
     position: relative;
     resize: horizontal;
     z-index: 0;
@@ -963,7 +1020,7 @@ body {
             '.ttable {{'\
                 'display: inline-grid; '\
                 'grid-template-columns: {};'\
-                'top: 1.3em; left:0;'\
+                'top: 1.3rem; left:0;'\
                 'grid-column-gap:2px;'\
                 'background-color:#0000A9; '\
                 '}}'.format(' '.join([f[1] for f in table])).encode('utf-8') )
@@ -1002,10 +1059,12 @@ if __name__ == '__main__':
     
     addr = 'localhost'
     port = 8080
-    
-    dbase_class = first.OpenDatabase('../wines.fol')
+
+    filename = '../wines.fol'
+    dbase_class = first.OpenDatabase(filename)
     DbaseField.Generate(dbase_class)
-    first.ArgSQL = 1    
+    first.ArgSQL = 1
+    persistent = first.SQL_persistent( "default",filename)     
 
     try:
         server = HTTPServer((addr, port), GetHandler)
