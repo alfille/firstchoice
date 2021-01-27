@@ -193,6 +193,11 @@ class CookieManager:
         return cls.active_cookies[session]['table']
         
     @classmethod
+    def SetTable( cls, cookie, table ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['table'] = table
+        
+    @classmethod
     def GetTableName( cls, cookie ):
         session = cls.GetSession( cookie )
         return cls.active_cookies[session]['current']['table']
@@ -342,6 +347,7 @@ class GetHandler(BaseHTTPRequestHandler):
         self.PAGE( { field:form[field].value for field in form.keys() } )
     
     def PAGE( self, formdict ):
+        global persistent
 
         # Begin the response
         self._head()
@@ -362,6 +368,8 @@ class GetHandler(BaseHTTPRequestHandler):
                 table = CookieManager.GetTable(self.cookie)
                 if ttype == "reset":
                     CookieManager.ResetTable( self.cookie )
+                elif ttype == "cancel":
+                    pass
                 elif ttype == "resize":
                     table[t0][1] = t1
                 elif ttype == "remove":
@@ -380,6 +388,7 @@ class GetHandler(BaseHTTPRequestHandler):
                         for i in range(len(table)-1,-1,-1):
                             if table[i][0] not in nlist:
                                 del(table[i])
+                        CookieManager.SetTableMod( self.cookie )
                 elif ttype == "move":
                     # from 0 to before 1
                     t0 = int(t0)
@@ -389,7 +398,29 @@ class GetHandler(BaseHTTPRequestHandler):
                     table.insert(t1,e)
                 elif ttype == "restore":
                     table.append( (t0,"1fr") )
-                    
+                elif ttype == "choose":
+                    CookieManager.SetTableName( self.cookie, t0 )
+                    CookieManager.SetTable( self.cookie, persistent.GetTable(t0) )
+                elif ttype == "name":
+                    CookieManager.SetTableName( self.cookie, t0 )
+                    persistent.SetTable( t0, table )
+                elif ttype == 'tremove':
+                    if t0 != "default": # cannot delete default
+                        persistent.SetTable( t0, None ) # deletes
+                        if t0 == CookieManager.GetTableName( self.cookie ): # change existing to default
+                            CookieManager.SetTableName( self.cookie, "default" )
+                            CookieManager.SetTable( self.cookie, persistent.GetTable("default") )
+                elif ttype == 'trename':
+                    if t0 != t1:
+                        table = persistent.GetTable(t0)
+                        persistent.SetTable( t1, table )
+                        if t0 != "default": # cannot delete default
+                            persistent.SetTable( t0, None ) # deletes
+                        tcurrent = CookieManager.GetTableName( self.cookie )
+                        if t0 == tcurrent or t1 == tcurrent: # change current part of rename
+                            CookieManager.SetTableName( self.cookie, t1 )
+                            CookieManager.SetTable( self.cookie, table )
+                            
             self.wfile.write('<head>'\
                 '<link href="/tablestyle.css" rel="stylesheet" type="text/css">'\
                 '</head>'.encode('utf-8'))
@@ -600,6 +631,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 '</div>'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') ) 
         
     def TABLE( self ):
+        global persistent
 
         # Get field list
         table = CookieManager.GetTable(self.cookie)
@@ -627,24 +659,23 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write('<div class="tallflex">'.encode('utf-8') )        
 
         #dialog (hidden)
-        flist = [f[0] for f in table]
-        checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,first.PrintField(f)) for f in flist])
-        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,first.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
+        table_now = CookieManager.GetTableName(self.cookie)
+        if CookieManager.GetTableMod(self.cookie):
+            table_now += " (modified)"
         self.wfile.write(
             '<div id="tabledialog">'\
-                '<h2>Table format: {}{}</h2>'\
+                '<center><h2>Table formatting management</h2></center>'\
+                '<h3>Currrent format: {}</h3>'\
                 '<div class="wideflex">'\
+                    '<div class="tallflex">{}</div>'\
+                    '<div class="tallflex">{}</div>'\
                     '<div class="tallflex">'\
-                    '<fieldset><legend>Choose fields shown</legend>'\
                     '{}'\
-                    '<button type="button" onClick="fSelect()" class="dialogbutton">Save</button>'\
-                    '</div>'\
-                    '<div class="tallflex">'\
                     '<button type="button" onClick="fReset()" class="dialogbutton">Reset Fields</button>'\
-                    '<button type="button" onClick="hideDialog()" class="dialogbutton">Cancel</button>'\
+                    '<button type="button" onClick="fCancel()" class="dialogbutton">Cancel</button>'\
                     '</fieldset></div>'\
                 '</div>'\
-            '</div>'.format(CookieManager.GetSearchName(self.cookie)," (modified)" if CookieManager.GetTableMod(self.cookie) else "",'<br>'.join([checked,unchecked])).encode('utf-8') )
+            '</div>'.format(table_now, self._tablefields(table), self._tablechoose(), self._tablename() ).encode('utf-8') )
         
         # Status and menu
         self.wfile.write(
@@ -684,6 +715,33 @@ class GetHandler(BaseHTTPRequestHandler):
         # End Flex container
         self.wfile.write('</div>'.encode('utf-8') )        
         
+    def _tablefields( self, table ):
+        flist = [f[0] for f in table]
+        checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,first.PrintField(f)) for f in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,first.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
+        return '<fieldset id="fsfields"><legend>Choose fields shown</legend>{}'\
+        '<button type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" disabled>Ok</button>'\
+        '</fieldset>'.format('<br>'.join([checked,unchecked]))
+        #'<input type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" value="Ok" disabled>'\
+
+    def _tablechoose( self ):
+        global persistent
+        tlist = ['']+persistent.TableNames()
+        return '<fieldset id="fschoose"><legend>Existing formats</legend>'\
+        '<select name="tablechoose" id="tablechoose" onChange="TableChooseChanger()"><option>{}</option></select><br>'\
+        '<input type="button" onClick="TableChoose()" class="dialogbutton" id="TCSelect" value="Select" disabled><br>'\
+        '<input type="button" onClick="TableRename()" id="TCRename" class="dialogbutton" value="Rename" disabled><br>'\
+        '<input type="button" onClick="TableDelete()" id="TCDelete" class="dialogbutton" value="Delete" disabled>'\
+        '</fieldset>'.format('</option><option>'.join(tlist))        
+
+    def _tablename( self ):
+        global persistent
+        tlist = persistent.TableNames()
+        return '<fieldset id="fsnames"><legend>New format name</legend>'\
+        '<input list="tablenames" name="tablename" id="tablename" onInput="NameChanger()"><datalist id="tablenames">{}</datalist><br>'\
+        '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
+        '</fieldset>'.format(''.join(['<option value={}>'.format(t) for t in tlist]))        
+
     def _buttons( self, active_buttons, disabled_buttons ):
         blist=''
         bd = type(self).buttondict
@@ -730,6 +788,10 @@ function DeleteRecord() {
     def TABLESCRIPT( self ):
         return '''
 <script>
+function Able(n,v) {
+    var x=document.getElementById(n);
+    if (x !==null) {x.disabled=!v}
+};
 function chooseFunction(id) {
     document.getElementById("_ID").value = id;
     document.getElementById("ID").submit();
@@ -764,6 +826,20 @@ function fReset( ) {
     document.getElementById("table_type").value = "reset";
     document.getElementById("table_back").submit();
     }
+function fCancel( ) {
+    document.getElementById("table_type").value = "cancel";
+    document.getElementById("table_back").submit();
+    }
+function TableChoose( ) {
+    document.getElementById("table_type").value = "choose";
+    document.getElementById("table_0").value = document.getElementById("tablechoose").value;
+    document.getElementById("table_back").submit();
+    }
+function TableName( ) {
+    document.getElementById("table_type").value = "name";
+    document.getElementById("table_0").value = document.getElementById("tablename").value;
+    document.getElementById("table_back").submit();
+    }
 function drop(event,to) {
     event.preventDefault();
     var from = event.dataTransfer.getData("Text");
@@ -779,11 +855,44 @@ function dragEnd(event) {
 function allowDrop(event) {
     event.preventDefault();
 }
+function FieldChanger() {
+    Able("fschoose",false);
+    Able("fsnames",false);
+    Able("tablefieldok",true);
+    }
+function TableChooseChanger() {
+    Able("fsnames",false);
+    Able("fsfields",false);
+    Able("TCSelect",true);
+    Able("TCRename",true);
+    Able("TCDelete",true);
+    }
+function NameChanger() {
+    Able("fschoose",false);
+    Able("fsfields",false);
+    Able("tablenameok",true);
+    }
+function TableRename( ) {
+    var d = document.getElementById("tablechoose").value;
+    var x = prompt("Rename this table format?",d);
+    if ( x != null ) {
+        document.getElementById("table_type").value = "trename";
+        document.getElementById("table_0").value = d;
+        document.getElementById("table_1").value = x;
+        document.getElementById("table_back").submit();
+        }
+    }
+function TableDelete( ) {
+    var d = document.getElementById("tablechoose").value;
+    var x = confirm("Do you want to delete the '" + d +"' table format?");
+    if ( x == true ) {
+        document.getElementById("table_type").value = "tremove";
+        document.getElementById("table_0").value = d;
+        document.getElementById("table_back").submit();
+        }
+    }
 function showDialog() {
     document.getElementById("tabledialog").style.display = "block";
-}
-function hideDialog() {
-    document.getElementById("tabledialog").style.display = "none";
 }
 
     </script>'''
@@ -942,7 +1051,6 @@ body {
   display: none; /* Hidden by default */
   position: fixed; /* Stay in place */
   z-index: 1000; /* Sit on top */
-  padding-top: 1rem; /* Location of the box */
   left: 8px;
   top: 8px;
   /*width: 100%; */ /* Full width */
@@ -954,13 +1062,17 @@ body {
   background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
 }
 .dialogbutton {
-    padding: 1rem;
+    padding: .5rem;
     font-size: 1rem;
-    background-color: darkgrey;
-    color: white;
+    background-color: #CCCCFF;
+    color: #0000A9;
     margin: 10px;
+    float: right;
     border-radius: 8px;
 }
+.dialogbutton:disabled {
+    background-color: lightgray;
+    }
 .tallflex {
     display: flex;
     flex-direction: column;

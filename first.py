@@ -1067,6 +1067,7 @@ class SQL_table:
                 print('DROP TABLE IF EXISTS first')
             cursor = cls.connection.cursor()
             cursor.execute('DROP TABLE IF EXISTS first')
+            cls.connection.commit()
         
     @classmethod
     def Create( cls, field_list ):
@@ -1077,6 +1078,7 @@ class SQL_table:
             print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) )
         cursor = cls.connection.cursor()
         cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) ) 
+        cls.connection.commit()
 
     @classmethod    
     def AllDataGet( cls ):
@@ -1114,6 +1116,7 @@ class SQL_persistent:
             print('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
         cursor = self.connection.cursor()
         cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
+        self.connection.commit()
 
     def NameList( self, ptype ):
         if ArgSQL > 0:
@@ -1123,11 +1126,20 @@ class SQL_persistent:
         return [n[0] for n in nm]
 
     def SetField( self, name, ptype, data ):
-        j = json.dumps(data)
-        if ArgSQL > 0:
-            print('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
-        cursor = self.connection.cursor()
-        cursor.execute('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
+        if data is None:
+            #Do a DELETE !
+            if ArgSQL > 0:
+                print('DELETE FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
+            cursor = self.connection.cursor()
+            cursor.execute('DELETE FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
+            self.connection.commit()
+        else:
+            j = json.dumps(data)
+            if ArgSQL > 0:
+                print('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
+            cursor = self.connection.cursor()
+            cursor.execute('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
+            self.connection.commit()
 
     def GetField( self, name, ptype ):
         if ArgSQL > 0:
