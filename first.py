@@ -52,7 +52,6 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
-
 BLOCKSIZE = 128
 ArgVerbose = 0
 ArgFields = 0
@@ -927,12 +926,6 @@ class SQL_FOL_handler(FOL_handler):
         # Put all FOL data into SQL table
         SQL_table.AllDataPut(self.data)
 
-        s = SQL_record.FindID(13)
-        print(s)
-        print( SQL_record.IDtoDict( 14 ) )
-        
-        #print(SQL_record().Search( {'Color' : '..red..' } ) )
-        #print(SQL_record().Search( {'Color' : '..red..', "Region" : '..na..' } ) )
         
     def Fields( self ):
         self.fields = [SqlField(f['field']) for f in self.form['fields']]

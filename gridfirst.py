@@ -362,7 +362,6 @@ class GetHandler(BaseHTTPRequestHandler):
         if formdict['button'] == type(self).buttondict['table'][1]:
             if "table_type" in formdict:
                 ttype = formdict['table_type']
-                print("TABLE TYPE: ",ttype)
                 t0 = formdict['table_0']
                 t1 = formdict['table_1']
                 table = CookieManager.GetTable(self.cookie)
@@ -376,7 +375,6 @@ class GetHandler(BaseHTTPRequestHandler):
                     if len(table) > 1:
                         del( table[t0] )
                 elif ttype == "select":
-                    print(t0)
                     nlist = t0.split(',')
                     if len(nlist) > 0:
                         flist = [f[0] for f in table]
@@ -420,6 +418,14 @@ class GetHandler(BaseHTTPRequestHandler):
                         if t0 == tcurrent or t1 == tcurrent: # change current part of rename
                             CookieManager.SetTableName( self.cookie, t1 )
                             CookieManager.SetTable( self.cookie, table )
+                elif ttype == 'widths':
+                    wid = t0.split(',')
+                    if len(wid) == len(table):
+                        table = list(zip([t[0] for t in table],wid))
+                        tname = CookieManager.GetTableName( self.cookie )
+                        persistent.SetTable( tname, table )
+                        CookieManager.SetTableName( self.cookie, tname ) # to clear mod
+                        CookieManager.SetTable( self.cookie, table )
                             
             self.wfile.write('<head>'\
                 '<link href="/tablestyle.css" rel="stylesheet" type="text/css">'\
@@ -633,11 +639,11 @@ class GetHandler(BaseHTTPRequestHandler):
     def TABLE( self ):
         global persistent
 
+        # script
+        self.wfile.write(self.TABLESCRIPTpre().encode('utf-8') )
+
         # Get field list
         table = CookieManager.GetTable(self.cookie)
-
-        # script
-        self.wfile.write(self.TABLESCRIPT().encode('utf-8') )
         
         # hidden form choose a line for FORM
         self.wfile.write(
@@ -670,6 +676,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     '<div class="tallflex">{}</div>'\
                     '<div class="tallflex">{}</div>'\
                     '<div class="tallflex">'\
+                    '<button type="button" onClick="fColumns()" class="dialogbutton">Save Column Sizes</button>'\
                     '{}'\
                     '<button type="button" onClick="fReset()" class="dialogbutton">Reset Fields</button>'\
                     '<button type="button" onClick="fCancel()" class="dialogbutton">Cancel</button>'\
@@ -688,7 +695,7 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write( '<div class="ttable">'.encode('utf-8') )
         for i,f in enumerate(table):
             self.wfile.write(
-                '<div class="thead" onResize="fResize({})" ondrop="drop(event,{})" ondragover="allowDrop(event)">'\
+                '<div class="thead" ondrop="drop(event,{})" ondragover="allowDrop(event)" data-n="{}">'\
                 '<span class="shead" draggable="true" onDragStart="dragStart(event,{})" onDragEnd="dragEnd(event)">{}</span>'\
                 '</div>'.format(i,i,i,first.PrintField(table[i][0])).encode('utf-8') )
 
@@ -715,6 +722,9 @@ class GetHandler(BaseHTTPRequestHandler):
         # End Flex container
         self.wfile.write('</div>'.encode('utf-8') )        
         
+        # script
+        self.wfile.write(self.TABLESCRIPTpost().encode('utf-8') )
+
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
         checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,first.PrintField(f)) for f in flist])
@@ -785,13 +795,14 @@ function DeleteRecord() {
         }
 };</script>'''
 
-    def TABLESCRIPT( self ):
+    def TABLESCRIPTpre( self ):
+        # Column widths (in table) need to be defined prior to creation
         return '''
 <script>
 function Able(n,v) {
     var x=document.getElementById(n);
     if (x !==null) {x.disabled=!v}
-};
+    };
 function chooseFunction(id) {
     document.getElementById("_ID").value = id;
     document.getElementById("ID").submit();
@@ -893,9 +904,40 @@ function TableDelete( ) {
     }
 function showDialog() {
     document.getElementById("tabledialog").style.display = "block";
-}
+    }
+// Observe column widths
+for (th of document.getElementsByClassName("thead")) {
+    widths.push(0)
+    ro.observe(th);
+    }
+</script>'''
 
-    </script>'''
+    def TABLESCRIPTpost( self ):
+        # Column monitoring can only happen after creation
+        return '''
+<script>
+function fColumns() {
+    document.getElementById("table_type").value = "widths";
+    var wid = [];
+    for (const w of widths) {
+        wid.push(Math.max(parseInt(w),10).toString()+"px");
+    }
+    document.getElementById("table_0").value = wid.toString();
+    document.getElementById("table_back").submit();
+    }
+var widths=[]
+var ro = new ResizeObserver(entrylist => {
+  for (let entry of entrylist) {
+    const cr = entry.contentRect;
+    widths[parseInt(entry.target.getAttribute("data-n"))]=cr.width+2*cr.left;
+  }
+});
+// Observe column widths
+for (th of document.getElementsByClassName("thead")) {
+    widths.push(0)
+    ro.observe(th);
+    }
+</script>'''
 
     def _post_message( self, form ):
         message_parts = [
