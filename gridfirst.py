@@ -277,22 +277,21 @@ class DbaseField:
         
 class GetHandler(BaseHTTPRequestHandler):
     buttondict = {
-        'reset'    : ( '#EDA9FB', 'Reset entries' ),
-        'table'    : ( '#CCCC00', 'Table view' ),
-        'search'   : ( '#8CD7EE', 'Search' ),
-        'savesearch': ( '#8CD7EE', 'Save search' ),
-        'getsearch': ( '#8CD7EE', 'Get search' ),
-        'research' : ( '#8CD7EE', 'Modify search' ),
-        'next'     : ( '#8CD7EE', 'Next' ),
-        'back'     : ( '#8CD7EE', 'Back' ),
-        'save'     : ( '#B1FABB', 'Update' ),
-        'add'      : ( '#B1FABB', 'Add' ),
-        'copy'     : ( '#ECF470', 'Duplicate' ),
-        'delete'   : ( '#E37791', 'Delete' ),
-        'clear'    : ( '#E37791',  'Clear' ),
-        'blank'    : ( '#0000A9', '' ),
-        'id'       : ( '#000000', 'id' ),
-        'resize'   : ( '#000000', 'resize' ),
+        'reset'    : 'Reset entries',
+        'table'    : 'Table view',
+        'search'   : 'Search',
+        'savesearch': 'Save search',
+        'getsearch': 'Get search',
+        'research' : 'Modify search',
+        'next'     : 'Next',
+        'back'     : 'Back',
+        'save'     : 'Update',
+        'add'      : 'Add',
+        'copy'     : 'Duplicate',
+        'delete'   : 'Delete',
+        'clear'    : 'Clear',
+        'id'       : 'id',
+        'resize'   : 'resize',
         }
      
     def _searchBar( self, formdict, searchstate ):
@@ -359,7 +358,7 @@ class GetHandler(BaseHTTPRequestHandler):
             # Empty dictionary
             formdict['button'] = "Edit"
         
-        if formdict['button'] == type(self).buttondict['table'][1]:
+        if formdict['button'] == type(self).buttondict['table']:
             if "table_type" in formdict:
                 ttype = formdict['table_type']
                 t0 = formdict['table_0']
@@ -438,7 +437,7 @@ class GetHandler(BaseHTTPRequestHandler):
             self.wfile.write('<head>'\
                 '<link href="/formstyle.css" rel="stylesheet" type="text/css">'\
                 '</head>'.encode('utf-8'))
-            if formdict['button'] == type(self).buttondict['reset'][1]:
+            if formdict['button'] == type(self).buttondict['reset']:
                 formdict = CookieManager.GetLast(self.cookie)
                 formdict['button'] = 'Edit' # No infinite loop
             self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
@@ -457,7 +456,7 @@ class GetHandler(BaseHTTPRequestHandler):
         print("formdict",formdict)
         button = ''
         for b in type(self).buttondict:
-            if formdict['button'] == type(self).buttondict[b][1]:
+            if formdict['button'] == type(self).buttondict[b]:
                 button = b
                 break;
         
@@ -659,7 +658,7 @@ class GetHandler(BaseHTTPRequestHandler):
             '<input type="hidden" name="table_0" id="table_0" value="0">'\
             '<input type="hidden" name="table_1" id="table_1" value="0">'\
             '<input type="hidden" name="button" value="{}">'\
-            '</form>'.format(self.path,type(self).buttondict['table'][1]).encode('utf-8') )
+            '</form>'.format(self.path,type(self).buttondict['table']).encode('utf-8') )
 
         # Flex container
         self.wfile.write('<div class="tallflex">'.encode('utf-8') )        
@@ -754,15 +753,14 @@ class GetHandler(BaseHTTPRequestHandler):
 
     def _buttons( self, active_buttons, disabled_buttons ):
         blist=''
-        bd = type(self).buttondict
         for bl in [['Table','table',],['Search','search','next','back','research',],['Form','reset','clear',],['Record','copy','add','save','delete'],]:
             blist += '<fieldset><legend>{}</legend>'.format(bl[0])
             for b in bl[1:]:
-                d = bd[b]
+                disabled = "disabled" if b in disabled_buttons else ""
                 if b == 'delete':
-                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" style="background-color:{}" value="{}" {}>'.format(b,d[0],d[1],"disabled" if b in disabled_buttons else "")
+                    blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" value="{}" {}>'.format(b,type(self).buttondict[b],disabled)
                 else:
-                    blist += '<input id={} name="button" type="submit" style="background-color:{}" value="{}" {}>'.format(b,d[0],d[1],"disabled" if b in disabled_buttons else "")
+                    blist += '<input id={} name="button" type="submit" value="{}" {}>'.format(b,type(self).buttondict[b],disabled)
             blist += '</fieldset>'
         return blist
 
@@ -1063,6 +1061,21 @@ textarea, input {
 input[type="button"], input[type="submit"]  {
     border-radius: 8px;
 }
+#reset { background-color:#EDA9FB }
+#table { background-color: #CCCC00 }
+#search { background-color: #8CD7EE }
+#savesearch { background-color: #8CD7EE }
+#getsearch { background-color: #8CD7EE }
+#research { background-color: #66B3FF }
+#next { background-color: #8CD7EE }
+#back { background-color: #8CD7EE }
+#save { background-color: #B1FABB }
+#add { background-color: #B1FABB }
+#copy { background-color: #00CC66 }
+#delete { background-color: #E37791 }
+#clear { background-color: #EDA9FB }
+#id { background-color: #000000 }
+#resize { background-color: #000000 }
 '''.encode('utf-8') )
                 
     def TABLECSS( self ):
