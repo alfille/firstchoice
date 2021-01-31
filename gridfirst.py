@@ -43,6 +43,7 @@ except:
     raise
     
 import first
+import persistent
 
 try:
     import textwrap
@@ -51,8 +52,8 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
 
-# Connection to persistent database
-persistent = None
+# Connection to persistent_state database
+persistent_state_state = None
 
 class SearchState:
     def __init__(self, dictionary):
@@ -139,12 +140,12 @@ class CookieManager:
                 t = sorted([ v['time'] for v in cls.active_cookies.values() ])[30]
                 cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
 
-            global persistent
-            ps = persistent.GetSearch("default")
-            ts = persistent.GetTable("default")
+            global persistent_state_state
+            ps = persistent_state_state.GetSearch("default")
+            ts = persistent_state_state.GetTable("default")
             if ts is None:
                 ts = [(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
-                persistent.SetTable( "default", ts )
+                persistent_state_state.SetTable( "default", ts )
 
             # time used to trim list
             # search is a SearchState object
@@ -346,7 +347,7 @@ class GetHandler(BaseHTTPRequestHandler):
         self.PAGE( { field:form[field].value for field in form.keys() } )
     
     def PAGE( self, formdict ):
-        global persistent
+        global persistent_state_state
 
         # Begin the response
         self._head()
@@ -397,22 +398,22 @@ class GetHandler(BaseHTTPRequestHandler):
                     table.append( (t0,"1fr") )
                 elif ttype == "choose":
                     CookieManager.SetTableName( self.cookie, t0 )
-                    CookieManager.SetTable( self.cookie, persistent.GetTable(t0) )
+                    CookieManager.SetTable( self.cookie, persistent_state_state.GetTable(t0) )
                 elif ttype == "name":
                     CookieManager.SetTableName( self.cookie, t0 )
-                    persistent.SetTable( t0, table )
+                    persistent_state_state.SetTable( t0, table )
                 elif ttype == 'tremove':
                     if t0 != "default": # cannot delete default
-                        persistent.SetTable( t0, None ) # deletes
+                        persistent_state_state.SetTable( t0, None ) # deletes
                         if t0 == CookieManager.GetTableName( self.cookie ): # change existing to default
                             CookieManager.SetTableName( self.cookie, "default" )
-                            CookieManager.SetTable( self.cookie, persistent.GetTable("default") )
+                            CookieManager.SetTable( self.cookie, persistent_state_state.GetTable("default") )
                 elif ttype == 'trename':
                     if t0 != t1:
-                        table = persistent.GetTable(t0)
-                        persistent.SetTable( t1, table )
+                        table = persistent_state_state.GetTable(t0)
+                        persistent_state_state.SetTable( t1, table )
                         if t0 != "default": # cannot delete default
-                            persistent.SetTable( t0, None ) # deletes
+                            persistent_state_state.SetTable( t0, None ) # deletes
                         tcurrent = CookieManager.GetTableName( self.cookie )
                         if t0 == tcurrent or t1 == tcurrent: # change current part of rename
                             CookieManager.SetTableName( self.cookie, t1 )
@@ -422,7 +423,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     if len(wid) == len(table):
                         table = list(zip([t[0] for t in table],wid))
                         tname = CookieManager.GetTableName( self.cookie )
-                        persistent.SetTable( tname, table )
+                        persistent_state_state.SetTable( tname, table )
                         CookieManager.SetTableName( self.cookie, tname ) # to clear mod
                         CookieManager.SetTable( self.cookie, table )
                             
@@ -636,7 +637,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 '</div>'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') ) 
         
     def TABLE( self ):
-        global persistent
+        global persistent_state_state
 
         # script
         self.wfile.write(self.TABLESCRIPTpre().encode('utf-8') )
@@ -734,8 +735,8 @@ class GetHandler(BaseHTTPRequestHandler):
         #'<input type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" value="Ok" disabled>'\
 
     def _tablechoose( self ):
-        global persistent
-        tlist = ['']+persistent.TableNames()
+        global persistent_state_state
+        tlist = ['']+persistent_state_state.TableNames()
         return '<fieldset id="fschoose"><legend>Existing formats</legend>'\
         '<select name="tablechoose" id="tablechoose" onChange="TableChooseChanger()"><option>{}</option></select><br>'\
         '<input type="button" onClick="TableChoose()" class="dialogbutton" id="TCSelect" value="Select" disabled><br>'\
@@ -744,8 +745,8 @@ class GetHandler(BaseHTTPRequestHandler):
         '</fieldset>'.format('</option><option>'.join(tlist))        
 
     def _tablename( self ):
-        global persistent
-        tlist = persistent.TableNames()
+        global persistent_state_state
+        tlist = persistent_state_state.TableNames()
         return '<fieldset id="fsnames"><legend>New format name</legend>'\
         '<input list="tablenames" name="tablename" id="tablename" onInput="NameChanger()"><datalist id="tablenames">{}</datalist><br>'\
         '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
@@ -1231,7 +1232,7 @@ if __name__ == '__main__':
     dbase_class = first.OpenDatabase(filename)
     DbaseField.Generate(dbase_class)
     first.ArgSQL = 1
-    persistent = first.SQL_persistent( "default",filename)     
+    persistent_state_state = persistent.SQL_persistent_state( "default",filename)     
 
     try:
         server = HTTPServer((addr, port), GetHandler)
