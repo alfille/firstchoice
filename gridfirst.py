@@ -44,6 +44,7 @@ except:
     
 import first
 import persistent
+import searchstate
 
 try:
     import textwrap
@@ -54,75 +55,6 @@ except:
 
 # Connection to persistent_state database
 persistent_state_state = None
-
-class SearchState:
-    def __init__(self, dictionary):
-        self._last_dict = self.FieldDict( dictionary )
-        self._list = [ID[0] for ID in first.SQL_record.SearchDict( self.last_dict )]
-        self._index = -1
-        if self._list is None:
-            self._length = 0
-        else:
-            self._length = len(self._list)
-            #print("Search list",self._list)
-        
-    def FieldDict( self, dictionary ):
-        d = {}
-        for k in dictionary:
-            if k in first.SQL_table.field_list:
-                d[k] = dictionary[k]
-        return d
-        
-    @property
-    def last_dict(self):
-        return self._last_dict
-
-    @property
-    def first( self ):
-        if self._length == 0:
-            return None
-        else:
-            self._index = 0
-            return self.list[0]
-        
-    @property
-    def next( self ):
-        #print("Next",self._index,self._list)
-        if self._length == 0:
-            return None
-
-        self._index += 1
-
-        return self.index_check()
-    
-    @property
-    def back( self ):
-        if self._length == 0:
-            return None
-
-        self._index -= 1
-
-        return self.index_check()
-
-    def index_check( self ):
-        if self._index < 0:
-            self._index = 0
-        elif self._index >= self.length:
-            self._index = self._length-1
-        return self._list[self._index]
-
-    @property
-    def list(self):
-        return self._list
-
-    @property
-    def length( self):
-        return self._length
-
-    @property
-    def index( self ):
-        # Not Zero-based
-        return self._index + 1
 
 class CookieManager:
     active_cookies = {}
@@ -162,9 +94,9 @@ class CookieManager:
         return session
 
     @classmethod
-    def SetSearch( cls, cookie, searchstate ):
+    def SetSearch( cls, cookie, active_search ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['search'] = searchstate 
+        cls.active_cookies[session]['search'] = active_search 
 
     @classmethod
     def GetSearch( cls, cookie ):
@@ -295,8 +227,8 @@ class GetHandler(BaseHTTPRequestHandler):
         'resize'   : 'resize',
         }
      
-    def _searchBar( self, formdict, searchstate ):
-        self._statusBar( formdict,'<meter value={0} min=1 max={1}></meter> Search: {0} of {1}'.format(searchstate.index,searchstate.length) )
+    def _searchBar( self, formdict, active_search ):
+        self._statusBar( formdict,'<meter value={0} min=1 max={1}></meter> Search: {0} of {1}'.format(active_search.index,active_search.length) )
 
 
     def _statusBar( self, formdict, text=''  ):
@@ -466,22 +398,22 @@ class GetHandler(BaseHTTPRequestHandler):
         # default inactive buttons
         deactbut = ['reset']
 
-        searchstate = CookieManager.GetSearch(self.cookie)
+        active_search = CookieManager.GetSearch(self.cookie)
 
         if button == 'research':
             # Modify Last Search
-            if searchstate is None:
+            if active_search is None:
                 self._statusBar( formdict, 'No prior search' )
 
             else:
-                formdict = searchstate.last_dict
+                formdict = active_search.last_dict
                 self._statusBar( formdict, 'Modify Search' )
 
         elif button == 'search':
             # Search
-            searchstate = SearchState(formdict)
-            CookieManager.SetSearch( self.cookie, searchstate )
-            searchID = searchstate.first
+            active_search = searchstate.SearchState(formdict)
+            CookieManager.SetSearch( self.cookie, active_search )
+            searchID = active_search.first
             if searchID is None:
                 # no matches
                 self._statusBar( {},'Search: Not Found')
@@ -489,31 +421,31 @@ class GetHandler(BaseHTTPRequestHandler):
                 actbut.remove('search')
             else:
                 formdict = first.SQL_record.IDtoDict(searchID)                
-                self._searchBar( formdict,searchstate )
+                self._searchBar( formdict,active_search )
 
         elif button == 'next':
             # Next in search
-            if searchstate is None:
+            if active_search is None:
                 self._statusBar( formdict, 'No prior search' )
             else:
-                searchID = searchstate.next
+                searchID = active_search.next
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
                     formdict = first.SQL_record.IDtoDict(searchID)                
-                    self._searchBar( formdict,searchstate )
+                    self._searchBar( formdict,active_search )
                 
         elif button == 'back':
             # Previous in search
-            if searchstate is None:
+            if active_search is None:
                 self._statusBar( formdict, 'No prior search' )
             else:
-                searchID = searchstate.back
+                searchID = active_search.back
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
                     formdict = first.SQL_record.IDtoDict(searchID)                
-                    self._searchBar( formdict,searchstate )
+                    self._searchBar( formdict,active_search )
                 
         elif button == 'add':
             # Add a Record
@@ -583,10 +515,10 @@ class GetHandler(BaseHTTPRequestHandler):
             actbut += ['save','add']
             deactbut += ['copy','delete']
 
-        if searchstate is not None:
+        if active_search is not None:
             # old search
             actbut += ['research']
-            if searchstate.length > 0 :
+            if active_search.length > 0 :
                 # valid search
                 actbut += ['next','back']
 
@@ -699,15 +631,15 @@ class GetHandler(BaseHTTPRequestHandler):
                 '<span class="shead" draggable="true" onDragStart="dragStart(event,{})" onDragEnd="dragEnd(event)">{}</span>'\
                 '</div>'.format(i,i,i,first.PrintField(table[i][0])).encode('utf-8') )
 
-        searchstate = CookieManager.GetSearch(self.cookie)
-        if searchstate is None or searchstate.length==0:
-            searchstate = SearchState({})
-            CookieManager.SetSearch( self.cookie, searchstate )
+        active_search = CookieManager.GetSearch(self.cookie)
+        if active_search is None or active_search.length==0:
+            active_search = searchstate.SearchState({})
+            CookieManager.SetSearch( self.cookie, active_search )
 
         # Table contents
         back = False
 
-        full_list = first.SQL_record.SortedSearchDict( [f[0] for f in table], searchstate.last_dict )
+        full_list = first.SQL_record.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
         for r in full_list:
             i = r[0]
             back = not back
@@ -1232,7 +1164,7 @@ if __name__ == '__main__':
     dbase_class = first.OpenDatabase(filename)
     DbaseField.Generate(dbase_class)
     first.ArgSQL = 1
-    persistent_state_state = persistent.SQL_persistent_state( "default",filename)     
+    persistent_state_state = persistent.SQL_persistent( "default",filename)     
 
     try:
         server = HTTPServer((addr, port), GetHandler)
