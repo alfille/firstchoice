@@ -6,11 +6,12 @@
 # manages the search state -- i.e. what search is under way, and where in the search we are.
 
 import first
+import sqltable
 
 class SearchState:
     def __init__(self, dictionary):
         self._last_dict = self.FieldDict( dictionary )
-        self._list = [ID[0] for ID in first.SQL_record.SearchDict( self.last_dict )]
+        self._list = [ID[0] for ID in sqltable.SQL_record.SearchDict( self.last_dict )]
         self._index = -1
         if self._list is None:
             self._length = 0
@@ -21,7 +22,7 @@ class SearchState:
     def FieldDict( self, dictionary ):
         d = {}
         for k in dictionary:
-            if k in first.SQL_table.field_list:
+            if k in sqltable.SQL_table.field_list:
                 d[k] = dictionary[k]
         return d
         

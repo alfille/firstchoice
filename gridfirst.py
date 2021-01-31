@@ -45,6 +45,7 @@ except:
 import first
 import persistent
 import searchstate
+import sqltable
 
 try:
     import textwrap
@@ -234,10 +235,10 @@ class GetHandler(BaseHTTPRequestHandler):
     def _statusBar( self, formdict, text=''  ):
         self.wfile.write('<DIV id="head-grid" class="firststyle">'.encode('utf-8') )
 
-        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(first.SQL_record.total).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(first.SQL_record.added).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Changed: {}</DIV>'.format(first.SQL_record.updated).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Deleted: {}</DIV>'.format(first.SQL_record.deleted).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(sqltable..SQL_record.total).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(sqltable.SQL_record.added).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Changed: {}</DIV>'.format(sqltable.SQL_record.updated).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Deleted: {}</DIV>'.format(sqltable.SQL_record.deleted).encode('utf-8') )
 
         if '_ID' in formdict:
             self.wfile.write('<DIV class="hcell">Record = {}</DIV>'.format(formdict['_ID']).encode('utf-8') )
@@ -420,7 +421,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 deactbut += ['search']
                 actbut.remove('search')
             else:
-                formdict = first.SQL_record.IDtoDict(searchID)                
+                formdict = sqltable.SQL_record.IDtoDict(searchID)                
                 self._searchBar( formdict,active_search )
 
         elif button == 'next':
@@ -432,7 +433,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
-                    formdict = first.SQL_record.IDtoDict(searchID)                
+                    formdict = sqltable.SQL_record.IDtoDict(searchID)                
                     self._searchBar( formdict,active_search )
                 
         elif button == 'back':
@@ -444,17 +445,17 @@ class GetHandler(BaseHTTPRequestHandler):
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
-                    formdict = first.SQL_record.IDtoDict(searchID)                
+                    formdict = sqltable.SQL_record.IDtoDict(searchID)                
                     self._searchBar( formdict,active_search )
                 
         elif button == 'add':
             # Add a Record
-            if first.SQL_record.IsEmpty( formdict ):
+            if sqltable.SQL_record.IsEmpty( formdict ):
                 self._statusBar( formdict, 'Empty record not added')
                 formdict['_Id'] = None
             else:
-                addID = first.SQL_record.Insert( first.SQL_record.DicttoTup(formdict) )                
-                formdict = first.SQL_record.IDtoDict( addID )                
+                addID = sqltable.SQL_record.Insert( first.SQL_record.DicttoTup(formdict) )                
+                formdict = sqltable.SQL_record.IDtoDict( addID )                
                 self._statusBar( formdict, 'Record Added')
 
         elif button == 'save':
@@ -484,14 +485,14 @@ class GetHandler(BaseHTTPRequestHandler):
             if '_ID' not in formdict or formdict['_ID'] is None:
                 self._statusBar( formdict, 'Delete only valid for an existing record')
             else:
-                first.SQL_record.Delete( formdict['_ID'])
+                sqltable.SQL_record.Delete( formdict['_ID'])
                 formdict['_ID'] = None
                 self._statusBar( formdict, 'Record deleted')
 
         elif button == 'id':
             # Back from Table with just record Id -- need to populate
             if '_ID' in formdict and formdict['_ID'] is not None:
-                formdict = first.SQL_record.IDtoDict( formdict['_ID'] )
+                formdict = sqltable.SQL_record.IDtoDict( formdict['_ID'] )
                 self._statusBar( formdict, "Record selected" )
             else:
                 self._statusBar( formdict, "Record not selected" )
@@ -522,7 +523,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 # valid search
                 actbut += ['next','back']
 
-        first.SQL_record.PadFields( formdict )
+        sqltable.SQL_record.PadFields( formdict )
 
         self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
         self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
@@ -639,7 +640,7 @@ class GetHandler(BaseHTTPRequestHandler):
         # Table contents
         back = False
 
-        full_list = first.SQL_record.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
+        full_list = sqltable.SQL_record.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
         for r in full_list:
             i = r[0]
             back = not back
