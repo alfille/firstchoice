@@ -34,28 +34,17 @@ if __name__ == "__main__":
         raise
 
 try:
-    import sqlite3
-except:
-    print("Please install the sqlite3 module")
-    print("\tit should be part of the standard python3 distribution")
-    raise
-    
-try:
     import textwrap
 except:
     print("Please install the textwrap module")
     print("\tit should be part of the standard python3 distribution")
     raise
-
-import sqltable.py
     
 BLOCKSIZE = 128
 ArgVerbose = 0
 ArgFields = 0
 ArgData = 0
 ArgBlocks = 0
-ArgSQL = 0
-
 
 class ScreenLoc:
     def __init__(self):
@@ -179,22 +168,6 @@ class DataField(textwrap.TextWrapper):
         self.SpaceOut( sl )
         return '\n'.join(sl)
                     
-def Print1( *args, **kwargs):
-    global ArgVerbose
-    if ArgVerbose >= 1:
-        print( *args, **kwargs)
-
-def Print2( *args, **kwargs):
-    global ArgVerbose
-    if ArgVerbose >= 2:
-        print( *args, **kwargs)
-
-def Print3( *args, **kwargs):
-    global ArgVerbose
-    if ArgVerbose >= 3:
-        print( *args, **kwargs)
-
-
 def hexdump( block ):
     if ( len(block) <= 128 ):
         hexdumpall(block)
@@ -378,7 +351,7 @@ class TextField:
             _length = struct.unpack_from('>H',string)[0]
             raw = string[2:]
         except:
-            Print1("Bad string input")
+            #print("Bad string input")
             raw = None
             return
             
@@ -602,7 +575,7 @@ class FOL_handler:
         headdata = b""
         for n in range(4):
             if not self._read():
-                Print1("Cannot read full 4 block header")
+                #print("Cannot read full 4 block header")
                 return
             headdata += self.block
         self.ReadHeader(headdata)
@@ -610,7 +583,7 @@ class FOL_handler:
         halfheader = b""
         for n in range(4):
             if not self._read():
-                Print1("Cannot read full second 4 block header")
+                #print("Cannot read full second 4 block header")
                 return
             halfheader += self.block
         self.ReadEmpties(halfheader)
@@ -623,9 +596,9 @@ class FOL_handler:
                 usedblocks = allocatedblocks
                 
         if allocatedblocks != self.header['allocatedblocks']:
-            Print1("Allocated blocks count is off")
+            #print("Allocated blocks count is off")
         if usedblocks != self.header['usedblocks']:
-            Print1("Used blocks count is off")
+            #print("Used blocks count is off")
         
         for [t,d] in self.blocks:
             self.ParseRecord( t,d )
@@ -683,15 +656,15 @@ class FOL_handler:
             'diskvarlen'     : data[14],
             'diskvar'        : data[15][:data[14]],
             }
-        Print3( self.header )
+        #print( self.header )
         self.header['fulldef'] = headdata
         if self.header['usedblocks'] != self.header['allocatedblocks']:
-            Print2("Blocks don't match")
+            #print("Blocks don't match")
         if type(self).gerb != data[4]:
-            Print1("GERB doesn't match")
+            #print("GERB doesn't match")
 
     def ReadEmpties( self, halfheader ):
-        Print3("Empties")
+        #print("Empties")
         #hexdump(halfheader)
         d = halfheader
         while True:
@@ -701,8 +674,8 @@ class FOL_handler:
                 break
             if a==0 and b == 0:
                 break
-            Print3('[{},{}]'.format(a,b),end="  ")
-        Print3('\n')
+            #print('[{},{}]'.format(a,b),end="  ")
+        #print('\n')
 
     def ReadData( self, d ):
         global ArgData
@@ -734,15 +707,15 @@ class FOL_handler:
         for i in range( 1 ):
             t = TextField(d)
             d = t.rest
-            Print3(t.text)
-            Print3(t.html)
+            #print(t.text)
+            #print(t.html)
     
     def ReadForm( self,d ):
         global ArgFields
         self.form={}
         self.form['length'], self.form['lines'], d = self.apply_struct( '>2H', d )
         
-        Print3("Formlength=",self.form['length'],"formlines=",self.form['lines'])
+        #print("Formlength=",self.form['length'],"formlines=",self.form['lines'])
         tot_length = 0
         self.form['fields'] = []
         sl = ScreenLoc()
@@ -773,9 +746,9 @@ class FOL_handler:
                 else:
                     print("\t{}\tlength={}\tlocation=".format(f['field'],f['length']),f['location'])
         if tot_length != self.header['fields'] + self.header['formlength'] - 1:
-            Print2("Formlength in header doesn't match computed");
+            #print("Formlength in header doesn't match computed");
         if self.form['length'] != tot_length + self.form['lines'] + 1:
-            Print3("Form.length in record doesn't match computed");
+            #print("Form.length in record doesn't match computed");
 
     def Block2Memory( self ):
         global ArgBlocks
@@ -788,7 +761,7 @@ class FOL_handler:
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x02:
             if self.blocks[-1][0] != 0x82:
-                Print1("Bad Continuation form")
+                #print("Bad Continuation form")
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Form definition continuation")
             self.blocks[-1][1] += blockdata
@@ -798,7 +771,7 @@ class FOL_handler:
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x01:
             if self.blocks[-1][0] != 0x81:
-                Print1("Bad Continuation data")
+                #print("Bad Continuation data")
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Data record continuation")
             self.blocks[-1][1] += blockdata
@@ -808,7 +781,7 @@ class FOL_handler:
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x04:
             if self.blocks[-1][0] != 0x84:
-                Print1("Bad Continuation program")
+                #print("Bad Continuation program")
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Program continuation")
             self.blocks[-1][1] += blockdata
@@ -818,12 +791,12 @@ class FOL_handler:
             self.blocks.append( [blocktype, blockdata[2:]] )
         elif blocktype == 0x03:
             if self.blocks[-1][0] != 0x83:
-                Print1("Bad Continuation view")
+                #print("Bad Continuation view")
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Table View continuation")
             self.blocks[-1][1] += blockdata
         elif blocktype == 0x00:
-            Print2("Block number ",self.blocknum,"\t","Empty record")
+            #print("Block number ",self.blocknum,"\t","Empty record")
             self.blocks.append( [blocktype, blockdata] )
         else:
             if ArgBlocks>0:
@@ -833,30 +806,30 @@ class FOL_handler:
 
     def ParseRecord( self, t, d ):
         if t == 0x82:
-            #Print2("Form definition")
+            ##print("Form definition")
             #hexdump(d)
             self.fulldef['form'] = d
             self.ReadForm(d)
         elif t == 0x81:
-            #Print2("Data")
+            ##print("Data")
             #hexdump(d)
             self.ReadData(d)
         elif t == 0x84:
-            #Print2("Program")
+            ##print("Program")
             #hexdump(d)
             self.fulldef['program'] = d
             self.ReadProgram(d)
         elif t == 0x83:
-            #Print2("Table View")
+            ##print("Table View")
             #hexdump(d)
             self.fulldef['view'] = d
             self.ReadView(d)
         elif t == 0x00:
             if not self.all_zeros(d):
-                Print1("Unexpected entries")
+                #print("Unexpected entries")
                 hexdump(d)
         else:
-            #Print2("Unknown = {:02X}".format(t))
+            ##print("Unknown = {:02X}".format(t))
             hexdump(d)
             
     def Write( self ):
@@ -905,136 +878,6 @@ class FOL_handler:
         
         self.FOLout.close()
             
-class SQL_FOL_handler(FOL_handler):
-    def __init__(self, FOLfile,  FOLout='OUTPUT.FOL' , sqlfile=None, **kwargs):
-        # Read in the FOL file (dbase) into an sql database sqlfile -- None for memory
-        # Alternatively use the connection to use an already opened database file
-        
-        global ArgSQL
-
-        super().__init__( FOLfile,  FOLout, **kwargs)
-
-        sqltable.SQL_table.Prepare( sqlfile )
-        
-        # Create new table
-        self.Fields()
-        sqltable.SQL_table.Create( self.fields )
-
-        # Put all FOL data into SQL table
-        sqltable.SQL_table.AllDataPut(self.data)
-
-        
-    def Fields( self ):
-        self.fields = [SqlField(f['field']) for f in self.form['fields']]
-        Print3(self.fields)
-
-    def Insert( self, data_tuple ):
-        return sqltable.SQL_record.Insert( data_tuple )
-        
-    def Write( self ):
-        self.data = sqltable.SQL_table.AllDataGet()
-        super().Write()
-
-def FC2SQLquery( fld, fol_string ):
-    # converts an first choice query to sqlite3 syntax
-    
-    # returns a tuple of
-    # 1. query text wit hplaceholders
-    # 2. list of params
-    
-    # None if no query
-    # 
-    if fol_string is None:
-        return None
-    
-    # trim off leading and training whitespace
-    fol = fol_string.strip()
-    if fol == '':
-        return None
-    
-    # Test for negation
-    if fol[0] == '/':
-        negate = " NOT "
-        fol = fol[1:]
-    else:
-        negate = ""
-        
-    # Test for Wildcard
-    if fol.find('..')>=0 or fol.find('?')>=0:
-        return (
-            fld + negate + ' LIKE ?', 
-            [fol.replace('..','%').replace('?','_')] 
-            )
-        
-    # Test for Range
-    if fol.find('->')>0:
-        return (
-            fld + negate + ' BETWEEN ? AND ?',
-            fol.split('->',1)
-            )
-        
-    # Test for conditions
-    if fol[0] == '=':
-        if negate == '':
-            return (
-                fld + '= ?',
-                [fol[1:]]
-                )
-        else:
-            return (
-                fld + '!= ?',
-                [fol[1:]]
-                )
-    if fol[0].find('<=') == 0:
-        if negate == '':
-            return (
-                fld + '<= ?',
-                [fol[1:]]
-                )
-        else:
-            return (
-                fld + '> ?',
-                [fol[1:]]
-                )
-    if fol[0].find('>=') == 0:
-        if negate == '':
-            return (
-                fld + '>= ?',
-                [fol[1:]]
-                )
-        else:
-            return (
-                fld + '< ?',
-                [fol[1:]]
-                )
-    if fol[0] == '>':
-        if negate == '':
-            return (
-                fld + '> ?',
-                [fol[1:]]
-                )
-        else:
-            return (
-                fld + '<= ?',
-                [fol[1:]]
-                )
-    if fol[0] == '<':
-        if negate == '':
-            return (
-                fld + '< ?',
-                [fol[1:]]
-                )
-        else:
-            return (
-                fld + '>= ?',
-                [fol[1:]]
-                )
-        
-    return (
-        fld + ' LIKE ?',
-        [fol]
-        )
-
 class RecordOut:
     def __init__( self, FOLclass, FOLout ):
         self.FOLclass = FOLclass
@@ -1150,10 +993,6 @@ if __name__ == '__main__':
         cl = argparse.ArgumentParser(description="Use a PFS:First Choice v3 database file (.FOL) for data access and writing. 2020 by Paul H Alfille")
         cl.add_argument("In",help="Existing database file (type .FOL)",type=argparse.FileType('rb'))
         cl.add_argument("Out",help="New database file",type=argparse.FileType('wb'),nargs='?',default="OUTPUT.FOL")
-    #    cl.add_argument("O",help="Depth of large Box (default Cube)",type=int,nargs='?',default=None)
-    #    cl.add_argument("-m","--maximum",help="Maximum size of tiling square allowed",type=int,nargs='?',default=None)
-    #    cl.add_argument("-s","--show",help="Show the solutions graphically",action="store_true")
-    #    cl.add_argument("-3","--cube",help="3-D solution -- cubes in box",action="store_true")
         cl.add_argument("-f","--fields",help="Show database fields (repeat for more detail)",action="count")
         cl.add_argument("-d","--data",help="Show database data",action="count")
         cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
@@ -1179,7 +1018,7 @@ if __name__ == '__main__': # command line
     # Start program
     
     # Read in databaase (FOL file already open from command line)
-    dbase_class = SQL_FOL_handler( args.In, args.Out )
+    dbase_class = FOL_handler( args.In, args.Out )
     
     # Changes could happen here,
     # If nothing else, this is a test of parsing
@@ -1191,7 +1030,7 @@ if __name__ == '__main__': # command line
     
 else: #module
     def OpenDatabase( databasename ):
-        return SQL_FOL_handler( databasename )
+        return FOL_handler( databasename )
         
     def Fields(dbase_class):
         return dbase_class.fields;

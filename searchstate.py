@@ -5,7 +5,6 @@
 
 # manages the search state -- i.e. what search is under way, and where in the search we are.
 
-import first
 import sqltable
 
 class SearchState:

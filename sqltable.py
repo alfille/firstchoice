@@ -11,6 +11,107 @@ except:
     raise
     
 ArgSQL = 0
+
+def FC2SQLquery( fld, fol_string ):
+    # converts an first choice query to sqlite3 syntax
+    
+    # returns a tuple of
+    # 1. query text wit hplaceholders
+    # 2. list of params
+    
+    # None if no query
+    # 
+    if fol_string is None:
+        return None
+    
+    # trim off leading and training whitespace
+    fol = fol_string.strip()
+    if fol == '':
+        return None
+    
+    # Test for negation
+    if fol[0] == '/':
+        negate = " NOT "
+        fol = fol[1:]
+    else:
+        negate = ""
+        
+    # Test for Wildcard
+    if fol.find('..')>=0 or fol.find('?')>=0:
+        return (
+            fld + negate + ' LIKE ?', 
+            [fol.replace('..','%').replace('?','_')] 
+            )
+        
+    # Test for Range
+    if fol.find('->')>0:
+        return (
+            fld + negate + ' BETWEEN ? AND ?',
+            fol.split('->',1)
+            )
+        
+    # Test for conditions
+    if fol[0] == '=':
+        if negate == '':
+            return (
+                fld + '= ?',
+                [fol[1:]]
+                )
+        else:
+            return (
+                fld + '!= ?',
+                [fol[1:]]
+                )
+    if fol[0].find('<=') == 0:
+        if negate == '':
+            return (
+                fld + '<= ?',
+                [fol[1:]]
+                )
+        else:
+            return (
+                fld + '> ?',
+                [fol[1:]]
+                )
+    if fol[0].find('>=') == 0:
+        if negate == '':
+            return (
+                fld + '>= ?',
+                [fol[1:]]
+                )
+        else:
+            return (
+                fld + '< ?',
+                [fol[1:]]
+                )
+    if fol[0] == '>':
+        if negate == '':
+            return (
+                fld + '> ?',
+                [fol[1:]]
+                )
+        else:
+            return (
+                fld + '<= ?',
+                [fol[1:]]
+                )
+    if fol[0] == '<':
+        if negate == '':
+            return (
+                fld + '< ?',
+                [fol[1:]]
+                )
+        else:
+            return (
+                fld + '>= ?',
+                [fol[1:]]
+                )
+        
+    return (
+        fld + ' LIKE ?',
+        [fol]
+        )
+
 class SQL_record(SQL_table):
     @classmethod
     def FindIDplus(cls, ID ):

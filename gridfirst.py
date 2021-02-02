@@ -1162,10 +1162,9 @@ if __name__ == '__main__':
     port = 8080
 
     filename = '../wines.fol'
-    dbase_class = first.OpenDatabase(filename)
+    dbase_class = sqlfirst.OpenDatabase(filename, SQLverbose=1)
     DbaseField.Generate(dbase_class)
-    first.ArgSQL = 1
-    persistent_state_state = persistent.SQL_persistent( "default",filename)     
+    persistent_state_state = persistent.SQL_persistent( "default",filename,SQLverbose=1)     
 
     try:
         server = HTTPServer((addr, port), GetHandler)
