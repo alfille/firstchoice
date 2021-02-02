@@ -42,7 +42,7 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
-import first
+import sqlfirst
 import persistent
 import searchstate
 import sqltable
@@ -77,7 +77,7 @@ class CookieManager:
             ps = persistent_state_state.GetSearch("default")
             ts = persistent_state_state.GetTable("default")
             if ts is None:
-                ts = [(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
+                ts = [(sqlfirst.SqlField(f.field),"1fr") for f in DbaseField.flist]
                 persistent_state_state.SetTable( "default", ts )
 
             # time used to trim list
@@ -119,7 +119,7 @@ class CookieManager:
     @classmethod
     def ResetTable( cls, cookie ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table']=[(first.SqlField(f.field),"1fr") for f in DbaseField.flist]
+        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in DbaseField.flist]
         
     @classmethod
     def GetTable( cls, cookie ):
@@ -184,7 +184,7 @@ class DbaseField:
         cls.flist = [ DbaseField(f) for f in dbase_class.form['fields'] ]         
 
     def __init__(self,field):
-        self._field = first.SqlField(field['field'])
+        self._field = sqlfirst.SqlField(field['field'])
         self._length = field['length']
         text_wrap = field['textwrap']
         self._final = text_wrap._final
@@ -235,7 +235,7 @@ class GetHandler(BaseHTTPRequestHandler):
     def _statusBar( self, formdict, text=''  ):
         self.wfile.write('<DIV id="head-grid" class="firststyle">'.encode('utf-8') )
 
-        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(sqltable..SQL_record.total).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(sqltable.SQL_record.total).encode('utf-8') )
         self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(sqltable.SQL_record.added).encode('utf-8') )
         self.wfile.write('<DIV class="hcell">Changed: {}</DIV>'.format(sqltable.SQL_record.updated).encode('utf-8') )
         self.wfile.write('<DIV class="hcell">Deleted: {}</DIV>'.format(sqltable.SQL_record.deleted).encode('utf-8') )
@@ -546,13 +546,13 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write(
             '<div class="lcell">'\
             '<label for="{}" class="texta">{}:</label>'\
-            '</div>'.format(datafield.field,first.PrintField(datafield.field[:10])).encode('utf-8') ) 
+            '</div>'.format(datafield.field,sqlfirst.PrintField(datafield.field[:10])).encode('utf-8') ) 
         if datafield.final:
             self.wfile.write(
                 '<div class="rcell">'\
                 '<textarea rows=6 cols=78 name="{}" id="{}" autocomplete="on" autocapitalize="none" oninput="ChangeData()">'\
                 '{}</textarea>'\
-                '</div>'.format(datafield.field,first.PrintField(datafield.field),fval).encode('utf-8') )
+                '</div>'.format(datafield.field,sqlfirst.PrintField(datafield.field),fval).encode('utf-8') )
         elif len(fval) > 0:
             lines = len(fval.split('\n'))
             if lines < datafield.lines:
@@ -621,8 +621,9 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write(
             '<div id="tstatus">'\
             '<button id="bhead" onClick="showDialog()">Menu...</button>'\
+            ' <a class="tlink" href="{}.csv" download>CSV file</a> '\
             '<span id="status"></span>'\
-            '</div>'.encode('utf-8') )
+            '</div>'.format(parse.quote(table_now)).encode('utf-8') )
 
         # Table header
         self.wfile.write( '<div class="ttable">'.encode('utf-8') )
@@ -630,7 +631,7 @@ class GetHandler(BaseHTTPRequestHandler):
             self.wfile.write(
                 '<div class="thead" ondrop="drop(event,{})" ondragover="allowDrop(event)" data-n="{}">'\
                 '<span class="shead" draggable="true" onDragStart="dragStart(event,{})" onDragEnd="dragEnd(event)">{}</span>'\
-                '</div>'.format(i,i,i,first.PrintField(table[i][0])).encode('utf-8') )
+                '</div>'.format(i,i,i,sqlfirst.PrintField(table[i][0])).encode('utf-8') )
 
         active_search = CookieManager.GetSearch(self.cookie)
         if active_search is None or active_search.length==0:
@@ -660,8 +661,8 @@ class GetHandler(BaseHTTPRequestHandler):
 
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
-        checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,first.PrintField(f)) for f in flist])
-        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,first.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
+        checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,sqlfirst.PrintField(f)) for f in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
         return '<fieldset id="fsfields"><legend>Choose fields shown</legend>{}'\
         '<button type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" disabled>Ok</button>'\
         '</fieldset>'.format('<br>'.join([checked,unchecked]))
@@ -1077,8 +1078,15 @@ body {
     z-index: 10;
     top: 0;
     position: sticky;
-    }    
+    }
 #bhead {
+    background-color: #00FFCC;
+    border-color: white;
+    border-style: groove;
+    height: 100%
+    position: sticky;
+    }
+.tlink {
     background-color: #00FFCC;
     border-color: white;
     border-style: groove;
@@ -1161,10 +1169,14 @@ if __name__ == '__main__':
     addr = 'localhost'
     port = 8080
 
+    #debug
+    persistent.ArgSQL = 1
+    sqlfirst.ArgSQL = 1
+
     filename = '../wines.fol'
-    dbase_class = sqlfirst.OpenDatabase(filename, SQLverbose=1)
+    dbase_class = sqlfirst.OpenDatabase(filename)
     DbaseField.Generate(dbase_class)
-    persistent_state_state = persistent.SQL_persistent( "default",filename,SQLverbose=1)     
+    persistent_state_state = persistent.SQL_persistent( "default",filename)     
 
     try:
         server = HTTPServer((addr, port), GetHandler)

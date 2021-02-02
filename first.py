@@ -597,9 +597,11 @@ class FOL_handler:
                 
         if allocatedblocks != self.header['allocatedblocks']:
             #print("Allocated blocks count is off")
+            pass
         if usedblocks != self.header['usedblocks']:
             #print("Used blocks count is off")
-        
+            pass
+            
         for [t,d] in self.blocks:
             self.ParseRecord( t,d )
 
@@ -660,8 +662,10 @@ class FOL_handler:
         self.header['fulldef'] = headdata
         if self.header['usedblocks'] != self.header['allocatedblocks']:
             #print("Blocks don't match")
+            pass
         if type(self).gerb != data[4]:
             #print("GERB doesn't match")
+            pass
 
     def ReadEmpties( self, halfheader ):
         #print("Empties")
@@ -747,8 +751,10 @@ class FOL_handler:
                     print("\t{}\tlength={}\tlocation=".format(f['field'],f['length']),f['location'])
         if tot_length != self.header['fields'] + self.header['formlength'] - 1:
             #print("Formlength in header doesn't match computed");
+            pass
         if self.form['length'] != tot_length + self.form['lines'] + 1:
             #print("Form.length in record doesn't match computed");
+            pass
 
     def Block2Memory( self ):
         global ArgBlocks
@@ -762,6 +768,7 @@ class FOL_handler:
         elif blocktype == 0x02:
             if self.blocks[-1][0] != 0x82:
                 #print("Bad Continuation form")
+                pass
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Form definition continuation")
             self.blocks[-1][1] += blockdata
@@ -772,6 +779,7 @@ class FOL_handler:
         elif blocktype == 0x01:
             if self.blocks[-1][0] != 0x81:
                 #print("Bad Continuation data")
+                pass
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Data record continuation")
             self.blocks[-1][1] += blockdata
@@ -782,6 +790,7 @@ class FOL_handler:
         elif blocktype == 0x04:
             if self.blocks[-1][0] != 0x84:
                 #print("Bad Continuation program")
+                pass
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Program continuation")
             self.blocks[-1][1] += blockdata
@@ -792,6 +801,7 @@ class FOL_handler:
         elif blocktype == 0x03:
             if self.blocks[-1][0] != 0x83:
                 #print("Bad Continuation view")
+                pass
             if ArgBlocks>0:
                 print("Block number ",self.blocknum,"\t","Table View continuation")
             self.blocks[-1][1] += blockdata
@@ -974,13 +984,6 @@ class DataRecordOut(RecordOut):
         cr = ba[2:].count(b'\r')
         struct.pack_into('>H',ba,0,len(ba)-2+cr)
         return ba
-
-def SqlField( field ):
-    return field.replace(' ','_')
-
-def PrintField( field ):
-    return field.replace('_',' ')
-    
 
 if __name__ == '__main__':
     def signal_handler( signal, frame ):

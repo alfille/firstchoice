@@ -112,6 +112,62 @@ def FC2SQLquery( fld, fol_string ):
         [fol]
         )
 
+class SQL_table:
+    field_list = None
+    connection = None
+    total = 0
+    added = 0
+    updated = 0
+    deleted = 0
+
+    @classmethod
+    def Prepare( cls, sqlfile ):
+        global ArgSQL
+        if sqlfile is not None:
+            cls.connection = sqlite3.connect(sqlfile)
+        else:
+            cls.connection = sqlite3.connect(":memory:")
+            
+        # Delete old table
+        if sqlfile is not None:
+            if ArgSQL > 0 :
+                print('DROP TABLE IF EXISTS first')
+            cursor = cls.connection.cursor()
+            cursor.execute('DROP TABLE IF EXISTS first')
+            cls.connection.commit()
+        
+    @classmethod
+    def Create( cls, field_list ):
+        global ArgSQL
+        # Create new table
+        cls.field_list = field_list
+        if ArgSQL > 0 :
+            print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) )
+        cursor = cls.connection.cursor()
+        cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) ) 
+        cls.connection.commit()
+
+    @classmethod    
+    def AllDataGet( cls ):
+        global ArgSQL
+        if ArgSQL > 0:
+            print('SELECT {} FROM first'.format(','.join(cls.field_list) ) )
+        cursor = cls.connection.cursor()
+        cursor.execute('SELECT {} FROM first'.format(','.join(cls.field_list)) )
+        return cursor.fetchall()
+
+    @classmethod    
+    def AllDataPut( cls, full_data_list ):
+        global ArgSQL
+        # Add all data
+        if ArgSQL > 0:
+            print('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*len(cls.field_list)))),"<Full Data List>")
+        cursor = cls.connection.cursor()
+        cursor.executemany('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(cls.field_list),','.join(list('?'*len(cls.field_list)))), full_data_list )
+        cls.connection.commit()
+        cursor.execute('SELECT COUNT(_ID) FROM first' )
+        cls.total = cursor.fetchone()[0]
+        
 class SQL_record(SQL_table):
     @classmethod
     def FindIDplus(cls, ID ):

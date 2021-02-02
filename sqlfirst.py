@@ -17,12 +17,20 @@ import sqltable
 
 ArgSQL = 0
 
+def SqlField( field ):
+    return field.replace(' ','_')
+
+def PrintField( field ):
+    return field.replace('_',' ')
+    
+
 class SQL_FOL_handler(first.FOL_handler):
     def __init__(self, FOLfile,  FOLout='OUTPUT.FOL' , sqlfile=None, **kwargs):
         # Read in the FOL file (dbase) into an sql database sqlfile -- None for memory
         # Alternatively use the connection to use an already opened database file
         
         global ArgSQL
+        sqltable.ArgSQL = ArgSQL
 
         super().__init__( FOLfile,  FOLout, **kwargs)
 
@@ -80,8 +88,7 @@ if __name__ == '__main__': # command line
     
 else: #module
     first.ArgSQL = 1
-    def OpenDatabase( databasename, SQLverbose=0 ):
-        global ArgSQL = SQLverbose
+    def OpenDatabase( databasename ):
         return SQL_FOL_handler( databasename )
         
     def Fields(dbase_class):
