@@ -42,6 +42,13 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
+try:
+    import csv
+except:
+    print("Please install the csv module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
 import sqlfirst
 import persistent
 import searchstate
@@ -256,6 +263,8 @@ class GetHandler(BaseHTTPRequestHandler):
             return self.TABLECSS()
         elif self.path == '/favicon.ico':
             return self.ICON()
+        elif self.path.endswith(".csv"):
+            return self.CSV()
 
         self._get_cookie()
 
@@ -639,17 +648,17 @@ class GetHandler(BaseHTTPRequestHandler):
             CookieManager.SetSearch( self.cookie, active_search )
 
         # Table contents
-        back = False
+        stripe = False
 
         full_list = sqltable.SQL_record.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
         for r in full_list:
             i = r[0]
-            back = not back
+            stripe = not stripe
             for f in r[1:] :
                 self.wfile.write(
                     '<div class="{}" onClick="chooseFunction({})">'\
                     '{}'\
-                    '</div>'.format("tcell0" if back else "tcell1",i, f).encode('utf-8') ) 
+                    '</div>'.format("tcell0" if stripe else "tcell1",i, f).encode('utf-8') ) 
 
         self.wfile.write( '</div>'.encode('utf-8') ) 
 
@@ -1141,6 +1150,31 @@ body {
         self.end_headers()
         global icon_data
         self.wfile.write(icon_data)
+
+    def CSVescaper( self, string ):
+        return '"'+str(string).replace('\n',' ').replace('"','""').replace("'","''")+'"'
+
+    def CSVrow( self, r ):
+        return (','.join([self.CSVescaper(rr) if isinstance(rr,str) else str(rr) for rr in r])+'\n').encode('utf-8')
+
+    def CSV( self ):
+        self._get_cookie()
+        table = CookieManager.GetTable(self.cookie)
+        active_search = CookieManager.GetSearch(self.cookie)
+        fields = [f[0] for f in table]
+
+        # Begin the response
+        self.send_response(200)
+        self.send_header('Content-Type',
+                         'text/csv; charset=utf-8')
+        self.end_headers()
+
+        #header row
+        self.wfile.write( self.CSVrow( [sqlfirst.PrintField(f) for f in fields] ) )
+
+        #data rows
+        for r in sqltable.SQL_record.SortedSearchDict( fields, active_search.last_dict ):
+            self.wfile.write(self.CSVrow(r))
 
     def _get_cookie( self ):
         head_cook = self.headers.get('Cookie')
