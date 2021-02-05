@@ -42,13 +42,6 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
-try:
-    import csv
-except:
-    print("Please install the csv module")
-    print("\tit should be part of the standard python3 distribution")
-    raise
-    
 import sqlfirst
 import persistent
 import searchstate
@@ -234,6 +227,16 @@ class GetHandler(BaseHTTPRequestHandler):
         'id'       : 'id',
         'resize'   : 'resize',
         }
+
+    support_files = {
+        'formstyle.css': 'text/css',
+        'tablestyle.css': 'text/css',
+        'formscript.js': 'application/javascript',
+        'tablescript1.js': 'application/javascript',
+        'tablescript2.js': 'application/javascript',
+        'favicon.ico': 'image/x-icon',
+        }
+
      
     def _searchBar( self, formdict, active_search ):
         self._statusBar( formdict,'<meter value={0} min=1 max={1}></meter> Search: {0} of {1}'.format(active_search.index,active_search.length) )
@@ -254,14 +257,12 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write('<DIV class="hcellbig">{}</DIV>'.format(text).encode('utf-8') )
         self.wfile.write('</DIV>'.encode('utf-8') )
     
-    def do_GET(self):        
+    def do_GET(self):
+        
         # Parse out special files
-        if self.path == '/formstyle.css':
-            return self.FILE( 'text/css', 'formstyle.css' )
-        elif self.path == '/tablestyle.css':
-            return self.FILE( 'text/css', 'tablestyle.css' )
-        elif self.path == '/favicon.ico':
-            return self.FILE('image/x-icon','favicon.ico')
+        sf = type(self).support_files
+        if self.path[1:] in sf:
+            return self.FILE( sf[self.path[1:]], self.path[1:] )
         elif self.path.endswith(".csv"):
             return self.CSV()
 
@@ -533,7 +534,8 @@ class GetHandler(BaseHTTPRequestHandler):
 
         sqltable.SQL_record.PadFields( formdict )
 
-        self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
+        #self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
+        self.wfile.write('<script src="formscript.js"></script>'.encode('utf-8') )
         self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
             self.wfile.write( '<input type="hidden" name="_ID" value="{}" >'.format(formdict['_ID']).encode('utf-8') )
@@ -581,7 +583,7 @@ class GetHandler(BaseHTTPRequestHandler):
         global persistent_state_state
 
         # script
-        self.wfile.write(self.TABLESCRIPTpre().encode('utf-8') )
+        self.wfile.write('<script src="tablescript1.js"></script>'.encode('utf-8') )
 
         # Get field list
         table = CookieManager.GetTable(self.cookie)
@@ -677,7 +679,7 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write('</div>'.encode('utf-8') )        
         
         # script
-        self.wfile.write(self.TABLESCRIPTpost().encode('utf-8') )
+        self.wfile.write('<script src="tablescript2.js"></script>'.encode('utf-8') )
 
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
@@ -719,178 +721,6 @@ class GetHandler(BaseHTTPRequestHandler):
             blist += '</fieldset>'
         return blist
 
-    def FORMSCRIPT( self ):
-        return '''
-<script>
-function Able(n,v) {
-    var x=document.getElementById(n);
-    if (x !==null) {x.disabled=!v}
-};
-function ChangeData() {
-    Able("add",true);
-    Able("back",false);
-    Able("copy",false);
-    Able("delete",false);
-    Able("clear",true);
-    Able("next",false);
-    Able("research",true);
-    Able("reset",true);
-    Able("save",true);
-    Able("search",true);
-};
-function DeleteRecord() {
-    var x = confirm("Do you want to delete the record?");
-    var d = document.getElementById("delete");
-    if ( x == true ) {
-        d.setAttribute('type','submit');
-        d.value = "Delete";
-        document.getElementById("mainform").submit();
-        }
-};</script>'''
-
-    def TABLESCRIPTpre( self ):
-        # Column widths (in table) need to be defined prior to creation
-        return '''
-<script>
-function Able(n,v) {
-    var x=document.getElementById(n);
-    if (x !==null) {x.disabled=!v}
-    };
-function chooseFunction(id) {
-    document.getElementById("_ID").value = id;
-    document.getElementById("ID").submit();
-    }
-function fResize( indx ) {
-    document.getElementById("table_type").value = "resize";
-    document.getElementById("table_0").value = indx;
-    document.getElementById("table_1").value = this.outerWidth;
-    document.getElementById("table_back").submit();
-    }
-function fMove( from, to ) {
-    document.getElementById("table_type").value = "move";
-    document.getElementById("table_0").value = from;
-    document.getElementById("table_1").value = to;
-    document.getElementById("table_back").submit();
-    }
-function fSelect( indx ) {
-    document.getElementById("table_type").value = "select";
-    let values = [];
-    document.querySelectorAll(`input[name="dfield"]:checked`).forEach((checkbox) => {
-        values.push(checkbox.value);
-    });
-    document.getElementById("table_0").value = values;
-    document.getElementById("table_back").submit();
-    }
-function fRestore( field ) {
-    document.getElementById("table_type").value = "restore";
-    document.getElementById("table_0").value = field;
-    document.getElementById("table_back").submit();
-    }
-function fReset( ) {
-    document.getElementById("table_type").value = "reset";
-    document.getElementById("table_back").submit();
-    }
-function fCancel( ) {
-    document.getElementById("table_type").value = "cancel";
-    document.getElementById("table_back").submit();
-    }
-function TableChoose( ) {
-    document.getElementById("table_type").value = "choose";
-    document.getElementById("table_0").value = document.getElementById("tablechoose").value;
-    document.getElementById("table_back").submit();
-    }
-function TableName( ) {
-    document.getElementById("table_type").value = "name";
-    document.getElementById("table_0").value = document.getElementById("tablename").value;
-    document.getElementById("table_back").submit();
-    }
-function drop(event,to) {
-    event.preventDefault();
-    var from = event.dataTransfer.getData("Text");
-    fMove( from, to.toString() ) ;
-    }
-function dragStart(event,n) {
-    document.getElementById("status").innerHTML = "Moving a column position"
-    event.dataTransfer.setData("text",n.toString())
-    }
-function dragEnd(event) {
-    document.getElementById("status").innerHTML = ""
-    }
-function allowDrop(event) {
-    event.preventDefault();
-}
-function FieldChanger() {
-    Able("fschoose",false);
-    Able("fsnames",false);
-    Able("tablefieldok",true);
-    }
-function TableChooseChanger() {
-    Able("fsnames",false);
-    Able("fsfields",false);
-    Able("TCSelect",true);
-    Able("TCRename",true);
-    Able("TCDelete",true);
-    }
-function NameChanger() {
-    Able("fschoose",false);
-    Able("fsfields",false);
-    Able("tablenameok",true);
-    }
-function TableRename( ) {
-    var d = document.getElementById("tablechoose").value;
-    var x = prompt("Rename this table format?",d);
-    if ( x != null ) {
-        document.getElementById("table_type").value = "trename";
-        document.getElementById("table_0").value = d;
-        document.getElementById("table_1").value = x;
-        document.getElementById("table_back").submit();
-        }
-    }
-function TableDelete( ) {
-    var d = document.getElementById("tablechoose").value;
-    var x = confirm("Do you want to delete the '" + d +"' table format?");
-    if ( x == true ) {
-        document.getElementById("table_type").value = "tremove";
-        document.getElementById("table_0").value = d;
-        document.getElementById("table_back").submit();
-        }
-    }
-function showDialog() {
-    document.getElementById("tabledialog").style.display = "block";
-    }
-// Observe column widths
-for (th of document.getElementsByClassName("thead")) {
-    widths.push(0)
-    ro.observe(th);
-    }
-</script>'''
-
-    def TABLESCRIPTpost( self ):
-        # Column monitoring can only happen after creation
-        return '''
-<script>
-function fColumns() {
-    document.getElementById("table_type").value = "widths";
-    var wid = [];
-    for (const w of widths) {
-        wid.push(Math.max(parseInt(w),10).toString()+"px");
-    }
-    document.getElementById("table_0").value = wid.toString();
-    document.getElementById("table_back").submit();
-    }
-var widths=[]
-var ro = new ResizeObserver(entrylist => {
-  for (let entry of entrylist) {
-    const cr = entry.contentRect;
-    widths[parseInt(entry.target.getAttribute("data-n"))]=cr.width+2*cr.left;
-  }
-});
-// Observe column widths
-for (th of document.getElementsByClassName("thead")) {
-    widths.push(0)
-    ro.observe(th);
-    }
-</script>'''
 
     def _post_message( self, form ):
         message_parts = [
@@ -1025,6 +855,5 @@ if __name__ == '__main__':
         print("Could not start server -- is another instance already using that port?")
         exit()
     print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(addr,port))
-
 
     server.serve_forever()
