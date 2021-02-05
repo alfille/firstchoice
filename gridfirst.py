@@ -257,12 +257,11 @@ class GetHandler(BaseHTTPRequestHandler):
     def do_GET(self):        
         # Parse out special files
         if self.path == '/formstyle.css':
-            return self.FORMCSS()
+            return self.FILE( 'text/css', 'formstyle.css' )
         elif self.path == '/tablestyle.css':
-            self._get_cookie()
-            return self.TABLECSS()
+            return self.FILE( 'text/css', 'tablestyle.css' )
         elif self.path == '/favicon.ico':
-            return self.ICON()
+            return self.FILE('image/x-icon','favicon.ico')
         elif self.path.endswith(".csv"):
             return self.CSV()
 
@@ -586,7 +585,19 @@ class GetHandler(BaseHTTPRequestHandler):
 
         # Get field list
         table = CookieManager.GetTable(self.cookie)
-        
+
+        # Computed style type (rest in tablestyle.css file)
+        self.wfile.write(
+        '<style>'\
+        '.ttable {{'\
+            'display: inline-grid; '\
+            'grid-template-columns: {};'\
+            'top: 1.3rem; left:0;'\
+            'grid-column-gap:2px;'\
+            'background-color:#0000A9; '\
+            '}}'\
+        '</style>'.format(' '.join([f[1] for f in table])).encode('utf-8') )
+
         # hidden form choose a line for FORM
         self.wfile.write(
             '<form action={} method="post" id="ID">'\
@@ -934,228 +945,24 @@ for (th of document.getElementsByClassName("thead")) {
         for morsel in self.cookie.keys():
             self.send_header("Set-Cookie", self.cookie[morsel].OutputString())
 
-        self.end_headers()
-
-    def FORMCSS( self ):
-        # Begin the response
-        self.send_response(200)
-        self.send_header('Content-Type',
-                         'text/css; charset=utf-8')
-        self.end_headers()
-        self.wfile.write('''
-body {
-    font-size: 100%;
-    background: #0000A9;
-    }
-.firststyle {
-    background-color:#0000A9;
-    font-family: "Lucida Console", Monaco, monospace;
-    font-size: 1.5rem;
-    letter-spacing: 2px;
-    word-spacing: 2px;
-    color: #A9A9A9;
-    font-weight: normal;
-    text-decoration: none;
-    font-style: normal;
-    font-variant: normal;
-    text-transform: none;
-    }
-.texta {
-    background-color: #00A9A9;
-    color:black;
-    }
-textarea, input {
-    font-size: 1.5rem;
-    }
-#head-grid {
-    display: grid;
-    grid-template-columns: auto auto auto auto;
-    background-color: #CC00CC;
-    color: #CC00CC;
-    grid-gap: 6px;
-}
-.hcell {
-    background-color:#0000A9;
-    color: #00A9A9;
-}    
-.hcellbig {
-    background-color:#0000A9;
-    color: #00A9A9;
-    grid-column-start: 2;
-    grid-column-end: 5;
-}    
-#form-grid {
-    display: grid;
-    grid-template-columns: 13rem 80rem;
-    background-color:#0000A9;
-}
-.lcell {
-    background-color: #00A9A9;
-    color:black;
-    text-align: right;
-}
-#buttons {
-    display: flex;
-    width: 100%;
-    background-color: #00A9A9;
-    color:black;
-    text-align: left;
-    vertical-align: bottom;
-}
-input[type="button"], input[type="submit"]  {
-    border-radius: 8px;
-}
-#reset { background-color:#EDA9FB }
-#table { background-color: #CCCC00 }
-#search { background-color: #8CD7EE }
-#savesearch { background-color: #8CD7EE }
-#getsearch { background-color: #8CD7EE }
-#research { background-color: #66B3FF }
-#next { background-color: #8CD7EE }
-#back { background-color: #8CD7EE }
-#save { background-color: #B1FABB }
-#add { background-color: #B1FABB }
-#copy { background-color: #00CC66 }
-#delete { background-color: #E37791 }
-#clear { background-color: #EDA9FB }
-#id { background-color: #000000 }
-#resize { background-color: #000000 }
-'''.encode('utf-8') )
-                
-    def TABLECSS( self ):
-        # Begin the response
-        self.send_response(200)
-        self.send_header('Content-Type',
-                         'text/css; charset=utf-8')
-        self.end_headers()
-        self.wfile.write('''
-body {
-    font-size: 100%;
-    margin: 0px;
-    }
-.firststyle {
-    background-color:#0000A9;
-    font-family: "Lucida Console", Monaco, monospace;
-    font-size: 1.5rem;
-    letter-spacing: 2px;
-    word-spacing: 2px;
-    color: #A9A9A9;
-    font-weight: normal;
-    text-decoration: none;
-    font-style: normal;
-    font-variant: normal;
-    text-transform: none;
-    }
-#tabledialog {
-  display: none; /* Hidden by default */
-  position: fixed; /* Stay in place */
-  z-index: 1000; /* Sit on top */
-  left: 8px;
-  top: 8px;
-  /*width: 100%; */ /* Full width */
-  /*height: 100%; */ /* 0 -> Full height */
-  overflow: auto; /* Enable scroll if needed */
-  color: black;
-  outline: 8px ridge threedface;
-  background-color: rgb(0,255,255); /* Fallback color */
-  background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
-}
-.dialogbutton {
-    padding: .5rem;
-    font-size: 1rem;
-    background-color: #CCCCFF;
-    color: #0000A9;
-    margin: 10px;
-    float: right;
-    border-radius: 8px;
-}
-.dialogbutton:disabled {
-    background-color: lightgray;
-    }
-.tallflex {
-    display: flex;
-    flex-direction: column;
-    }
-.wideflex {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-evenly;
-    }
-#tstatus {
-    background-color:#0000A9;
-    color: white;
-    z-index: 10;
-    top: 0;
-    position: sticky;
-    }
-#bhead {
-    background-color: #00FFCC;
-    border-color: white;
-    border-style: groove;
-    height: 100%
-    position: sticky;
-    }
-.tlink {
-    background-color: #00FFCC;
-    border-color: white;
-    border-style: groove;
-    height: 100%
-    position: sticky;
-    }
-.thead {
-    background-color: #00A9A9;
-    color:black;
-    resize: horizontal;
-    vertical-align: top;
-    overflow: auto;
-    z-index: 10;
-    top: 1.3rem;
-    position: -webkit-sticky;
-    position: sticky;
-    }
-.shead {
-    position: sticky;
-}
-.tcell0 {
-    background-color:#0000A9;
-}
-.tcell1 {
-    background-color:#0000D9;
-}
-.tcell0, .tcell1 {
-    color:yellow;
-    max-height: 5rem;
-    position: relative;
-    resize: horizontal;
-    z-index: 0;
-}
-.tcell0:hover, .tcell1:hover {
-    background-color: grey;
-}
-'''.encode('utf-8') )
-        table = CookieManager.GetTable( self.cookie )
-        self.wfile.write(
-            '.ttable {{'\
-                'display: inline-grid; '\
-                'grid-template-columns: {};'\
-                'top: 1.3rem; left:0;'\
-                'grid-column-gap:2px;'\
-                'background-color:#0000A9; '\
-                '}}'.format(' '.join([f[1] for f in table])).encode('utf-8') )
-
-    def ICON( self ):
-        self.send_response(200)
-        self.send_header('Content-Type',
-                         'image/x-icon; charset=utf-8')
-        self.end_headers()
-        global icon_data
-        self.wfile.write(icon_data)
+        self.end_headers()                
 
     def CSVescaper( self, string ):
         return '"'+str(string).replace('\n',' ').replace('"','""').replace("'","''")+'"'
 
     def CSVrow( self, r ):
         return (','.join([self.CSVescaper(rr) if isinstance(rr,str) else str(rr) for rr in r])+'\n').encode('utf-8')
+
+    def FILE( self, content_type, filename ):
+        # Begin the response
+        self.send_response(200)
+        self.send_header('Content-Type',
+                         '{}; charset=utf-8'.format(content_type)
+                         )
+        self.end_headers()
+        #data
+        with open(filename,"rb") as f:
+            self.wfile.write( f.read() )
 
     def CSV( self ):
         self._get_cookie()
@@ -1174,7 +981,7 @@ body {
 
         #data rows
         for r in sqltable.SQL_record.SortedSearchDict( fields, active_search.last_dict ):
-            self.wfile.write(self.CSVrow(r))
+            self.wfile.write(self.CSVrow(r[1:])) # First field is _ID -- skip
 
     def _get_cookie( self ):
         head_cook = self.headers.get('Cookie')
@@ -1218,9 +1025,6 @@ if __name__ == '__main__':
         print("Could not start server -- is another instance already using that port?")
         exit()
     print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(addr,port))
-
-    with open('favicon.ico','rb') as f:
-        icon_data = f.read()
 
 
     server.serve_forever()

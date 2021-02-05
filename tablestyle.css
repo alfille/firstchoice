@@ -1,0 +1,103 @@
+body {
+    font-size: 100%;
+    margin: 0px;
+    }
+.firststyle {
+    background-color:#0000A9;
+    font-family: "Lucida Console", Monaco, monospace;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    word-spacing: 2px;
+    color: #A9A9A9;
+    font-weight: normal;
+    text-decoration: none;
+    font-style: normal;
+    font-variant: normal;
+    text-transform: none;
+    }
+#tabledialog {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1000; /* Sit on top */
+  left: 8px;
+  top: 8px;
+  /*width: 100%; */ /* Full width */
+  /*height: 100%; */ /* 0 -> Full height */
+  overflow: auto; /* Enable scroll if needed */
+  color: black;
+  outline: 8px ridge threedface;
+  background-color: rgb(0,255,255); /* Fallback color */
+  background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
+}
+.dialogbutton {
+    padding: .5rem;
+    font-size: 1rem;
+    background-color: #CCCCFF;
+    color: #0000A9;
+    margin: 10px;
+    float: right;
+    border-radius: 8px;
+}
+.dialogbutton:disabled {
+    background-color: lightgray;
+    }
+.tallflex {
+    display: flex;
+    flex-direction: column;
+    }
+.wideflex {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    }
+#tstatus {
+    background-color:#0000A9;
+    color: white;
+    z-index: 10;
+    top: 0;
+    position: sticky;
+    }
+#bhead {
+    background-color: #00FFCC;
+    border-color: white;
+    border-style: groove;
+    height: 100%
+    position: sticky;
+    }
+.tlink {
+    background-color: #00FFCC;
+    border-color: white;
+    border-style: groove;
+    height: 100%
+    position: sticky;
+    }
+.thead {
+    background-color: #00A9A9;
+    color:black;
+    resize: horizontal;
+    vertical-align: top;
+    overflow: auto;
+    z-index: 10;
+    top: 1.3rem;
+    position: -webkit-sticky;
+    position: sticky;
+    }
+.shead {
+    position: sticky;
+}
+.tcell0 {
+    background-color:#0000A9;
+}
+.tcell1 {
+    background-color:#0000D9;
+}
+.tcell0, .tcell1 {
+    color:yellow;
+    max-height: 5rem;
+    position: relative;
+    resize: horizontal;
+    z-index: 0;
+}
+.tcell0:hover, .tcell1:hover {
+    background-color: grey;
+}

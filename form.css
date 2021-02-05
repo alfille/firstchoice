@@ -1,0 +1,77 @@
+body {
+    font-size: 100%;
+    background: #0000A9;
+    }
+.firststyle {
+    background-color:#0000A9;
+    font-family: "Lucida Console", Monaco, monospace;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    word-spacing: 2px;
+    color: #A9A9A9;
+    font-weight: normal;
+    text-decoration: none;
+    font-style: normal;
+    font-variant: normal;
+    text-transform: none;
+    }
+.texta {
+    background-color: #00A9A9;
+    color:black;
+    }
+textarea, input {
+    font-size: 1.5rem;
+    }
+#head-grid {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    background-color: #CC00CC;
+    color: #CC00CC;
+    grid-gap: 6px;
+}
+.hcell {
+    background-color:#0000A9;
+    color: #00A9A9;
+}    
+.hcellbig {
+    background-color:#0000A9;
+    color: #00A9A9;
+    grid-column-start: 2;
+    grid-column-end: 5;
+}    
+#form-grid {
+    display: grid;
+    grid-template-columns: 13rem 80rem;
+    background-color:#0000A9;
+}
+.lcell {
+    background-color: #00A9A9;
+    color:black;
+    text-align: right;
+}
+#buttons {
+    display: flex;
+    width: 100%;
+    background-color: #00A9A9;
+    color:black;
+    text-align: left;
+    vertical-align: bottom;
+}
+input[type="button"], input[type="submit"]  {
+    border-radius: 8px;
+}
+#reset { background-color:#EDA9FB }
+#table { background-color: #CCCC00 }
+#search { background-color: #8CD7EE }
+#savesearch { background-color: #8CD7EE }
+#getsearch { background-color: #8CD7EE }
+#research { background-color: #66B3FF }
+#next { background-color: #8CD7EE }
+#back { background-color: #8CD7EE }
+#save { background-color: #B1FABB }
+#add { background-color: #B1FABB }
+#copy { background-color: #00CC66 }
+#delete { background-color: #E37791 }
+#clear { background-color: #EDA9FB }
+#id { background-color: #000000 }
+#resize { background-color: #000000 }
