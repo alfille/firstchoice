@@ -42,6 +42,13 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
+try:
+    import os.path
+except:
+    print("Please install the os.path module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+    
 import sqlfirst
 import persistent
 import searchstate
@@ -229,12 +236,9 @@ class GetHandler(BaseHTTPRequestHandler):
         }
 
     support_files = {
-        'formstyle.css': 'text/css',
-        'tablestyle.css': 'text/css',
-        'formscript.js': 'application/javascript',
-        'tablescript1.js': 'application/javascript',
-        'tablescript2.js': 'application/javascript',
-        'favicon.ico': 'image/x-icon',
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.ico': 'image/x-icon',
         }
 
      
@@ -260,11 +264,12 @@ class GetHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         
         # Parse out special files
-        sf = type(self).support_files
-        if self.path[1:] in sf:
-            return self.FILE( sf[self.path[1:]], self.path[1:] )
-        elif self.path.endswith(".csv"):
-            return self.CSV()
+        ext = os.path.splitext(self.path)[1] # this extension
+        if len(ext)>1:
+            if ext == '.csv':
+                return self.CSV()
+            elif ext in type(self).support_files:
+                return self.FILE( self.path[1:])
 
         self._get_cookie()
 
@@ -783,15 +788,16 @@ class GetHandler(BaseHTTPRequestHandler):
     def CSVrow( self, r ):
         return (','.join([self.CSVescaper(rr) if isinstance(rr,str) else str(rr) for rr in r])+'\n').encode('utf-8')
 
-    def FILE( self, content_type, filename ):
+    def FILE( self, filename ):
+        ex = os.path.splitext(filename)[1]
         # Begin the response
         self.send_response(200)
         self.send_header('Content-Type',
-                         '{}; charset=utf-8'.format(content_type)
+                         '{}; charset=utf-8'.format(type(self).support_files[ex])
                          )
         self.end_headers()
         #data
-        with open(filename,"rb") as f:
+        with open(os.path.join(ex[1:],filename),"rb") as f:
             self.wfile.write( f.read() )
 
     def CSV( self ):
