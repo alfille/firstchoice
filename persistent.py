@@ -28,16 +28,39 @@ class SQL_persistent:
         # open or create database
         self.user = user
         self.filename = filename
-        self.connection = sqlite3.connect('persistent.db')
+        self.connection = type(self).Connect()
+
+    @classmethod
+    def Connect( cls ):
+        connection = sqlite3.connect('persistent.db')
         if ArgSQL > 0:
             print('CREATE TABLE IF NOT EXISTS persistent (user TEXT NOT NULL, filename TEXT NOT NULL, ptype TEXT NOT NULL, NAME TEXT  NOT NULL, jsondata TEXT)' )
-        cursor = self.connection.cursor()
+        cursor = connection.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS persistent (user TEXT NOT NULL, filename TEXT NOT NULL, ptype TEXT NOT NULL, NAME TEXT  NOT NULL, jsondata TEXT)' )
         if ArgSQL > 0:
             print('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
-        cursor = self.connection.cursor()
+        cursor = connection.cursor()
         cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
-        self.connection.commit()
+        connection.commit()
+        return connection
+
+    @classmethod
+    def Userlist( cls ):
+        connection = cls.Connect()
+        if ArgSQL > 0:
+            print('SELECT DISTINCT user FROM persistent ORDER BY user')
+        cursor = connection.cursor()
+        users = cursor.execute('SELECT DISTINCT user FROM persistent ORDER BY user' ).fetchall()
+        return [u[0] for u in users]
+
+    @classmethod
+    def Filelist( cls ):
+        connection = cls.Connect()
+        if ArgSQL > 0:
+            print('SELECT DISTINCT filename FROM persistent ORDER BY filename')
+        cursor = connection.cursor()
+        files = cursor.execute('SELECT DISTINCT filename FROM persistent ORDER BY filename' ).fetchall()
+        return [f[0] for f in files]
 
     def NameList( self, ptype ):
         if ArgSQL > 0:

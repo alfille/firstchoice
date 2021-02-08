@@ -1,7 +1,7 @@
 # http_server_GET.py
 
 try:
-    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import http.server
 except:
     print("Please install http.server module")
     print("\tit should be part of the standard python3 distribution")
@@ -43,9 +43,9 @@ except:
     raise
     
 try:
-    import os.path
+    import os
 except:
-    print("Please install the os.path module")
+    print("Please install the os module")
     print("\tit should be part of the standard python3 distribution")
     raise
     
@@ -53,16 +53,10 @@ import sqlfirst
 import persistent
 import searchstate
 import sqltable
-
-try:
-    import textwrap
-except:
-    print("Please install the textwrap module")
-    print("\tit should be part of the standard python3 distribution")
-    raise
+import dbaselist
 
 # Connection to persistent_state database
-persistent_state_state = None
+persistent_state = None
 
 class CookieManager:
     active_cookies = {}
@@ -80,18 +74,21 @@ class CookieManager:
                 t = sorted([ v['time'] for v in cls.active_cookies.values() ])[30]
                 cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
 
-            global persistent_state_state
-            ps = persistent_state_state.GetSearch("default")
-            ts = persistent_state_state.GetTable("default")
+            global persistent_state
+            ps = persistent_state.GetSearch("default")
+            ts = persistent_state.GetTable("default")
             if ts is None:
-                ts = [(sqlfirst.SqlField(f.field),"1fr") for f in DbaseField.flist]
-                persistent_state_state.SetTable( "default", ts )
+                ts = [(sqlfirst.SqlField(f.field),"1fr") for f in dbaselist.DbaseField.flist]
+                persistent_state.SetTable( "default", ts )
 
             # time used to trim list
             # search is a SearchState object
             # last is prior formdict
             # table is list of fields and sizes
             cls.active_cookies[session] = {
+                'dbaseobj': None,
+                'dbasename':'',
+                'user':'',
                 'time':datetime.time(),
                 'search':ps,
                 'last' : {},
@@ -101,6 +98,27 @@ class CookieManager:
             }
         return session
 
+    @classmethod
+    def SetDbaseObj( cls, cookie, dbaseobj ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['dbaseobj'] = dbaseobj
+    
+    @classmethod
+    def GetDbaseObj( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['dbaseobj']
+    
+    @classmethod
+    def SetUserDbase( cls, cookie, user, dbasename ):
+        session = cls.GetSession( cookie )
+        cls.active_cookies[session]['user'] = user
+        cls.active_cookies[session]['database'] = dbasename
+    
+    @classmethod
+    def GetUserDbase( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return tuple( cls.active_cookies[session][x] for x in ['user','dbasename'] )
+    
     @classmethod
     def SetSearch( cls, cookie, active_search ):
         session = cls.GetSession( cookie )
@@ -126,7 +144,7 @@ class CookieManager:
     @classmethod
     def ResetTable( cls, cookie ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in DbaseField.flist]
+        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in dbaselist.DbaseField.flist]
         
     @classmethod
     def GetTable( cls, cookie ):
@@ -180,43 +198,7 @@ class CookieManager:
         session = cls.GetSession( cookie )
         return cls.active_cookies[session]['modified']['search']
         
-class DbaseField:
-    # Convenience class to make finding field information easier
-    # Looks at the dbase_class.form object and both the fields list and the textwrap list
-    # 
-    flist = None
-
-    @classmethod
-    def Generate( cls, dbase_class ):
-        cls.flist = [ DbaseField(f) for f in dbase_class.form['fields'] ]         
-
-    def __init__(self,field):
-        self._field = sqlfirst.SqlField(field['field'])
-        self._length = field['length']
-        text_wrap = field['textwrap']
-        self._final = text_wrap._final
-        template = text_wrap.template
-        self._lines = len(template)
-        if template[-1] == 0:
-            self._lines -= 1
-        
-    @property
-    def field( self ):
-        return self._field
-        
-    @property
-    def final( self ):
-        return self._final
-        
-    @property
-    def length( self ):
-        return self._length
-        
-    @property
-    def lines( self ):
-        return self._lines
-        
-class GetHandler(BaseHTTPRequestHandler):
+class GetHandler(http.server.BaseHTTPRequestHandler):
     buttondict = {
         'reset'    : 'Reset entries',
         'table'    : 'Table view',
@@ -273,10 +255,11 @@ class GetHandler(BaseHTTPRequestHandler):
 
         self._get_cookie()
 
-        self.PAGE({})
+        self.PAGE({'button':'First'})
 
 
     def do_POST(self):
+
         self._get_cookie()
 
         # Parse the form data posted            
@@ -287,17 +270,17 @@ class GetHandler(BaseHTTPRequestHandler):
                      'CONTENT_TYPE':self.headers['Content-Type'],
                      })
 
-        #self.wfile.write(('<pre>{}</pre>'.format(self._post_message(form))).encode('utf-8'))
+#        self.wfile.write(('<pre>{}</pre>'.format(self._post_message(form))).encode('utf-8'))
 
         # Write the form (with headers)
-        print(self._get_message())
+#        print(self._get_message())
         self.PAGE( { field:form[field].value for field in form.keys() } )
     
     def PAGE( self, formdict ):
-        global persistent_state_state
+        global persistent_state
 
         # Begin the response
-        self._head()
+        self._head()            
        
         # Send to record or table view
 
@@ -306,7 +289,19 @@ class GetHandler(BaseHTTPRequestHandler):
             # Empty dictionary
             formdict['button'] = "Edit"
         
-        if formdict['button'] == type(self).buttondict['table']:
+        if formdict['button'] == "OK":
+            # Do processing after rendering before pre-forma post is processed
+            return self.SPLASH( formdict )
+
+        elif formdict['button'] == 'First' or CookieManager.GetUserDbase( self.cookie ) == ('',''):
+            self.wfile.write('<head>'\
+                '<link href="/introstyle.css" rel="stylesheet" type="text/css">'\
+                '</head>'.encode('utf-8'))
+            self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
+            self.wfile.write('<body>'.encode('utf-8') )
+            self.INTRO()
+
+        elif formdict['button'] == type(self).buttondict['table']:
             if "table_type" in formdict:
                 ttype = formdict['table_type']
                 t0 = formdict['table_0']
@@ -345,22 +340,22 @@ class GetHandler(BaseHTTPRequestHandler):
                     table.append( (t0,"1fr") )
                 elif ttype == "choose":
                     CookieManager.SetTableName( self.cookie, t0 )
-                    CookieManager.SetTable( self.cookie, persistent_state_state.GetTable(t0) )
+                    CookieManager.SetTable( self.cookie, persistent_state.GetTable(t0) )
                 elif ttype == "name":
                     CookieManager.SetTableName( self.cookie, t0 )
-                    persistent_state_state.SetTable( t0, table )
+                    persistent_state.SetTable( t0, table )
                 elif ttype == 'tremove':
                     if t0 != "default": # cannot delete default
-                        persistent_state_state.SetTable( t0, None ) # deletes
+                        persistent_state.SetTable( t0, None ) # deletes
                         if t0 == CookieManager.GetTableName( self.cookie ): # change existing to default
                             CookieManager.SetTableName( self.cookie, "default" )
-                            CookieManager.SetTable( self.cookie, persistent_state_state.GetTable("default") )
+                            CookieManager.SetTable( self.cookie, persistent_state.GetTable("default") )
                 elif ttype == 'trename':
                     if t0 != t1:
-                        table = persistent_state_state.GetTable(t0)
-                        persistent_state_state.SetTable( t1, table )
+                        table = persistent_state.GetTable(t0)
+                        persistent_state_.SetTable( t1, table )
                         if t0 != "default": # cannot delete default
-                            persistent_state_state.SetTable( t0, None ) # deletes
+                            persistent_state.SetTable( t0, None ) # deletes
                         tcurrent = CookieManager.GetTableName( self.cookie )
                         if t0 == tcurrent or t1 == tcurrent: # change current part of rename
                             CookieManager.SetTableName( self.cookie, t1 )
@@ -370,7 +365,7 @@ class GetHandler(BaseHTTPRequestHandler):
                     if len(wid) == len(table):
                         table = list(zip([t[0] for t in table],wid))
                         tname = CookieManager.GetTableName( self.cookie )
-                        persistent_state_state.SetTable( tname, table )
+                        persistent_state.SetTable( tname, table )
                         CookieManager.SetTableName( self.cookie, tname ) # to clear mod
                         CookieManager.SetTable( self.cookie, table )
                             
@@ -394,6 +389,36 @@ class GetHandler(BaseHTTPRequestHandler):
 
         self.wfile.write('</body>'.encode('utf-8'))
 
+    def SPLASH( self, formdict ):
+        global persistent_state
+
+        # filename and user
+        filename = formdict['FOL']
+        user = formdict['user']
+        
+        self.wfile.write('<head>'\
+            '<link href="/splashstyle.css" rel="stylesheet" type="text/css">'\
+            '</head>'.encode('utf-8'))
+
+        self.wfile.write(
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'\
+            '<body>'.encode('utf-8') )
+
+        # hidden form choose a line for FORM
+        self.wfile.write(
+            '<form action={} method="post" id="ID">'\
+            '<input type="hidden" name="button" value="Edit">'\
+            '</form>'.format(self.path).encode('utf-8') )
+
+        self.wfile.write(
+            '<div id="splash" class="firststyle"><h2>loading database {}...</h2></div>'\
+            '<script src="splashscript.js"></script>'\
+            '</body>'.format(filename).encode('utf-8') )
+
+        persistent_state = persistent.SQL_persistent( user,filename )     
+        CookieManager.SetDbaseObj( self.cookie, dbaselist.dbaselist( filename ) )
+        CookieManager.SetUserDbase( self.cookie, user,filename )
+
     def FORM( self, formdict ):
         # After a "POST" --- clicking one of the submit buttons
         # formdict has the button and field values (if entered)
@@ -401,7 +426,6 @@ class GetHandler(BaseHTTPRequestHandler):
         # place in search stored in pstate SearchState
         
         # button = button name from form, translate to local index name
-        print("formdict",formdict)
         button = ''
         for b in type(self).buttondict:
             if formdict['button'] == type(self).buttondict[b]:
@@ -539,7 +563,6 @@ class GetHandler(BaseHTTPRequestHandler):
 
         sqltable.SQL_record.PadFields( formdict )
 
-        #self.wfile.write(self.FORMSCRIPT().encode('utf-8') )
         self.wfile.write('<script src="formscript.js"></script>'.encode('utf-8') )
         self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
@@ -548,7 +571,7 @@ class GetHandler(BaseHTTPRequestHandler):
         
         # Fields
         self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
-        for f in DbaseField.flist:
+        for f in dbaselist.DbaseField.flist:
             self._textfield( f,formdict[f.field] )
         self.wfile.write( ('</div>').encode('utf-8') )
 
@@ -556,6 +579,31 @@ class GetHandler(BaseHTTPRequestHandler):
         self.wfile.write('<div id=buttons>{}</div>'.format(self._buttons(actbut,deactbut)).encode('utf-8') )
         self.wfile.write( ('</form>').encode('utf-8') )
         
+    def INTRO( self ):
+        # With no cookie or a move back from form
+        self.wfile.write(
+            '<div id="title"><h1>'\
+            '<a href="http://github.com/alfille/firstchoice">First Choice to Web</a>'\
+            '</h1><h3>&copy; 2021 Paul H Alfille</h3></div><br>'.encode('utf-8') ) 
+        
+        # button = button name from form, translate to local index name
+        self.wfile.write(
+        '<form id="intro" action="{}" method="post">'\
+        '<fieldset class="firststyle"><legend>User</legend>'\
+        '<label for="user">User name:</label><input id="user" name="user" list="users"><datalist id="users">{}</datalist>'\
+        '</fieldset><br>'\
+        '<fieldset class="firststyle"><legend>Database file</legend>'\
+        '<label for="FOL">Select a first choice database</label><select name="FOL" id="FOL">{}</select>'\
+        '</fieldset><br>'\
+        '<input type="submit" name="button" value="OK"></form>'.format(self.path,self._userlist(),self._filelist()).encode('utf-8') )
+
+    def _userlist( self ):
+        #print(persistent.SQL_persistent.Userlist())
+        return '<option value="default" select>'+''.join('<option value="{}">'.format(u) for u in persistent.SQL_persistent.Userlist() )
+        
+    def _filelist( self ):
+        return ''.join(['<option value={}>{}</option>'.format(f,f) for f in dbaselist.dbaselist.filelist()])
+
     def _textfield( self, datafield, fval ):
         # part of form
         self.wfile.write(
@@ -585,7 +633,7 @@ class GetHandler(BaseHTTPRequestHandler):
                 '</div>'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') ) 
         
     def TABLE( self ):
-        global persistent_state_state
+        global persistent_state
 
         # script
         self.wfile.write('<script src="tablescript1.js"></script>'.encode('utf-8') )
@@ -593,7 +641,7 @@ class GetHandler(BaseHTTPRequestHandler):
         # Get field list
         table = CookieManager.GetTable(self.cookie)
 
-        # Computed style type (rest in tablestyle.css file)
+        # Computed style type because the number and size of columnms varies (rest in tablestyle.css file)
         self.wfile.write(
         '<style>'\
         '.ttable {{'\
@@ -689,15 +737,15 @@ class GetHandler(BaseHTTPRequestHandler):
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
         checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,sqlfirst.PrintField(f)) for f in flist])
-        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in DbaseField.flist if f.field not in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in dbaselist.DbaseField.flist if f.field not in flist])
         return '<fieldset id="fsfields"><legend>Choose fields shown</legend>{}'\
         '<button type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" disabled>Ok</button>'\
         '</fieldset>'.format('<br>'.join([checked,unchecked]))
         #'<input type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" value="Ok" disabled>'\
 
     def _tablechoose( self ):
-        global persistent_state_state
-        tlist = ['']+persistent_state_state.TableNames()
+        global persistent_state
+        tlist = ['']+persistent_state.TableNames()
         return '<fieldset id="fschoose"><legend>Existing formats</legend>'\
         '<select name="tablechoose" id="tablechoose" onChange="TableChooseChanger()"><option>{}</option></select><br>'\
         '<input type="button" onClick="TableChoose()" class="dialogbutton" id="TCSelect" value="Select" disabled><br>'\
@@ -706,8 +754,8 @@ class GetHandler(BaseHTTPRequestHandler):
         '</fieldset>'.format('</option><option>'.join(tlist))        
 
     def _tablename( self ):
-        global persistent_state_state
-        tlist = persistent_state_state.TableNames()
+        global persistent_state
+        tlist = persistent_state.TableNames()
         return '<fieldset id="fsnames"><legend>New format name</legend>'\
         '<input list="tablenames" name="tablename" id="tablename" onInput="NameChanger()"><datalist id="tablenames">{}</datalist><br>'\
         '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
@@ -825,14 +873,15 @@ class GetHandler(BaseHTTPRequestHandler):
         if head_cook:
             self.cookie = cookies.SimpleCookie(head_cook)
             if "session" not in self.cookie:
-                #print('Bad cookie: no "session" entry')
+                #print("Cookie=> ",'Bad cookie: no "session" entry')
                 self.cookie = None
             else:
                 pass
-                #print("session = ", self.cookie["session"].value)
+                #print("Cookie=> ","session = ", self.cookie["session"].value)
         else:
-            print("session cookie not set!")
+            #print("Cookie=> ","session cookie not set!")
             self.cookie = None
+        #print("Cookie=> ","done")
 
     def _set_cookie( self ):
         expiration = datetime.datetime.now() + datetime.timedelta(days=7)
@@ -850,13 +899,8 @@ if __name__ == '__main__':
     persistent.ArgSQL = 1
     sqlfirst.ArgSQL = 1
 
-    filename = '../wines.fol'
-    dbase_class = sqlfirst.OpenDatabase(filename)
-    DbaseField.Generate(dbase_class)
-    persistent_state_state = persistent.SQL_persistent( "default",filename)     
-
     try:
-        server = HTTPServer((addr, port), GetHandler)
+        server = http.server.HTTPServer((addr, port), GetHandler)
     except:
         print("Could not start server -- is another instance already using that port?")
         exit()
