@@ -19,11 +19,6 @@ class DbaseField:
     # Convenience class to make finding field information easier
     # Looks at the dbase_class.form object and both the fields list and the textwrap list
     # 
-    flist = None
-
-    @classmethod
-    def Generate( cls, dbase_class ):
-        cls.flist = [ DbaseField(f) for f in dbase_class.form['fields'] ]         
 
     def __init__(self,field):
         self._field = sqlfirst.SqlField(field['field'])
@@ -63,8 +58,12 @@ class dbaselist(object):
     def __init__(self, filename):
         type(self).existing[filename] = self
         self.dbase_class = sqlfirst.OpenDatabase(filename)
-        DbaseField.Generate(self.dbase_class)
+        self._flist = [ DbaseField(f) for f in self.dbase_class.form['fields'] ] 
 
+    @property
+    def flist( self ) :
+        # field list of DbaseField objects
+        return self._flist
 
     @classmethod
     def filelist( cls ):

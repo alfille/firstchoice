@@ -55,11 +55,19 @@ import searchstate
 import sqltable
 import dbaselist
 
-# Connection to persistent_state database
-persistent_state = None
-
 class CookieManager:
     active_cookies = {}
+
+    @classmethod
+    def Valid( cls, cookie ):
+        session = cookie['session'].value
+        if session in cls.active_cookies:
+            ac = cls.active_cookies[session]
+            ac['time'] = datetime.time()
+            if ac['dbaseobj'] is None:
+                return False
+            return True
+        return False
 
     @classmethod
     def GetSession( cls, cookie ):
@@ -69,17 +77,10 @@ class CookieManager:
         if session in cls.active_cookies:
             cls.active_cookies[session]['time'] = datetime.time()
         else:
-            if len(cls.active_cookies) > 100:
+            if len(cls.active_cookies) > 1000:
                 # Too long, trim oldest 30%
-                t = sorted([ v['time'] for v in cls.active_cookies.values() ])[30]
+                t = sorted([ v['time'] for v in cls.active_cookies.values() ])[300]
                 cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
-
-            global persistent_state
-            ps = persistent_state.GetSearch("default")
-            ts = persistent_state.GetTable("default")
-            if ts is None:
-                ts = [(sqlfirst.SqlField(f.field),"1fr") for f in dbaselist.DbaseField.flist]
-                persistent_state.SetTable( "default", ts )
 
             # time used to trim list
             # search is a SearchState object
@@ -87,21 +88,17 @@ class CookieManager:
             # table is list of fields and sizes
             cls.active_cookies[session] = {
                 'dbaseobj': None,
+                'persistent': None,
                 'dbasename':'',
                 'user':'',
                 'time':datetime.time(),
-                'search':ps,
+                'search':{},
                 'last' : {},
-                'table':ts,
+                'table': {},
                 'current': { 'search':'default', 'table':'default', },
                 'modified': { 'search':False, 'table':False, },
             }
         return session
-
-    @classmethod
-    def SetDbaseObj( cls, cookie, dbaseobj ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['dbaseobj'] = dbaseobj
     
     @classmethod
     def GetDbaseObj( cls, cookie ):
@@ -111,9 +108,30 @@ class CookieManager:
     @classmethod
     def SetUserDbase( cls, cookie, user, dbasename ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['user'] = user
-        cls.active_cookies[session]['database'] = dbasename
+        ac = cls.active_cookies[session]
+        ac['user'] = user
+        ac['database'] = dbasename
+
+        # database object
+        dbaseobj = dbaselist.dbaselist( dbasename )
+        ac['dbaseobj'] = dbaseobj
+
+        # persistent database
+        ac['persistent'] = persistent.SQL_persistent( user, dbasename )
+        
+        ts = ac['persistent'].GetTable('default')
+        if ts is None:
+            ts = [(sqlfirst.SqlField(f.field),"1fr") for f in dbaseobj.flist]
+            ac['persistent'].SetTable('default', ts )
+        ac['table'] = ts
+        ac['search'] = ac['persistent'].GetSearch('default')
     
+    @classmethod
+    def Persistent( cls, cookie ):
+        session = cls.GetSession( cookie )
+        return cls.active_cookies[session]['persistent']
+        
+
     @classmethod
     def GetUserDbase( cls, cookie ):
         session = cls.GetSession( cookie )
@@ -144,17 +162,19 @@ class CookieManager:
     @classmethod
     def ResetTable( cls, cookie ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in dbaselist.DbaseField.flist]
+        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in cls.GetDbaseObj( cookie ).flist]
         
     @classmethod
     def GetTable( cls, cookie ):
         session = cls.GetSession( cookie )
+        print("GET TABLE",cls.active_cookies[session]['table'])
         return cls.active_cookies[session]['table']
         
     @classmethod
     def SetTable( cls, cookie, table ):
         session = cls.GetSession( cookie )
         cls.active_cookies[session]['table'] = table
+        print("SET TABLE",cls.active_cookies[session]['table'])
         
     @classmethod
     def GetTableName( cls, cookie ):
@@ -164,8 +184,10 @@ class CookieManager:
     @classmethod
     def SetTableName( cls, cookie, name ):
         session = cls.GetSession( cookie )
-        cls.active_cookies[session]['current']['table'] = name
-        cls.active_cookies[session]['modified']['table'] = False
+        ac = cls.active_cookies[session]
+        ac['current']['table'] = name
+        ac['modified']['table'] = False
+        ac['persistent'].SetTable( name, ac['table'] )
         
     @classmethod
     def SetTableMod( cls, cookie ):
@@ -277,8 +299,6 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self.PAGE( { field:form[field].value for field in form.keys() } )
     
     def PAGE( self, formdict ):
-        global persistent_state
-
         # Begin the response
         self._head()            
        
@@ -339,35 +359,35 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 elif ttype == "restore":
                     table.append( (t0,"1fr") )
                 elif ttype == "choose":
+                    CookieManager.SetTable( self.cookie, CookieManager.Persistent(self.cookie).GetTable(t0) )
                     CookieManager.SetTableName( self.cookie, t0 )
-                    CookieManager.SetTable( self.cookie, persistent_state.GetTable(t0) )
                 elif ttype == "name":
                     CookieManager.SetTableName( self.cookie, t0 )
-                    persistent_state.SetTable( t0, table )
                 elif ttype == 'tremove':
                     if t0 != "default": # cannot delete default
-                        persistent_state.SetTable( t0, None ) # deletes
+                        p = CookieManager.Persistent(self.cookie)
+                        p.SetTable( t0, None ) # deletes
                         if t0 == CookieManager.GetTableName( self.cookie ): # change existing to default
+                            CookieManager.SetTable( self.cookie, p.GetTable("default") )
                             CookieManager.SetTableName( self.cookie, "default" )
-                            CookieManager.SetTable( self.cookie, persistent_state.GetTable("default") )
                 elif ttype == 'trename':
+                    p = CookieManager.Persistent(self.cookie)
                     if t0 != t1:
-                        table = persistent_state.GetTable(t0)
-                        persistent_state_.SetTable( t1, table )
+                        table = p.GetTable(t0)
+                        p.SetTable( t1, table )
                         if t0 != "default": # cannot delete default
-                            persistent_state.SetTable( t0, None ) # deletes
+                            p.SetTable( t0, None ) # deletes
                         tcurrent = CookieManager.GetTableName( self.cookie )
                         if t0 == tcurrent or t1 == tcurrent: # change current part of rename
-                            CookieManager.SetTableName( self.cookie, t1 )
                             CookieManager.SetTable( self.cookie, table )
+                            CookieManager.SetTableName( self.cookie, t1 )
                 elif ttype == 'widths':
                     wid = t0.split(',')
                     if len(wid) == len(table):
                         table = list(zip([t[0] for t in table],wid))
                         tname = CookieManager.GetTableName( self.cookie )
-                        persistent_state.SetTable( tname, table )
-                        CookieManager.SetTableName( self.cookie, tname ) # to clear mod
                         CookieManager.SetTable( self.cookie, table )
+                        CookieManager.SetTableName( self.cookie, tname ) # to clear mod
                             
             self.wfile.write('<head>'\
                 '<link href="/tablestyle.css" rel="stylesheet" type="text/css">'\
@@ -390,8 +410,6 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write('</body>'.encode('utf-8'))
 
     def SPLASH( self, formdict ):
-        global persistent_state
-
         # filename and user
         filename = formdict['FOL']
         user = formdict['user']
@@ -415,8 +433,11 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             '<script src="splashscript.js"></script>'\
             '</body>'.format(filename).encode('utf-8') )
 
-        persistent_state = persistent.SQL_persistent( user,filename )     
-        CookieManager.SetDbaseObj( self.cookie, dbaselist.dbaselist( filename ) )
+        # This does everything
+        #  Links to persistent database
+        #  Opens native database
+        #  Parses database
+        #  Sets field lists
         CookieManager.SetUserDbase( self.cookie, user,filename )
 
     def FORM( self, formdict ):
@@ -571,7 +592,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         
         # Fields
         self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
-        for f in dbaselist.DbaseField.flist:
+        for f in CookieManager.GetDbaseObj( self.cookie ).flist:
             self._textfield( f,formdict[f.field] )
         self.wfile.write( ('</div>').encode('utf-8') )
 
@@ -633,8 +654,6 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 '</div>'.format(datafield.lines,datafield.field,datafield.field,datafield.length+datafield.lines,fval).encode('utf-8') ) 
         
     def TABLE( self ):
-        global persistent_state
-
         # script
         self.wfile.write('<script src="tablescript1.js"></script>'.encode('utf-8') )
 
@@ -737,15 +756,14 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
         checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,sqlfirst.PrintField(f)) for f in flist])
-        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in dbaselist.DbaseField.flist if f.field not in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in CookieManager.GetDbaseObj(self.cookie).flist if f.field not in flist])
         return '<fieldset id="fsfields"><legend>Choose fields shown</legend>{}'\
         '<button type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" disabled>Ok</button>'\
         '</fieldset>'.format('<br>'.join([checked,unchecked]))
         #'<input type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" value="Ok" disabled>'\
 
     def _tablechoose( self ):
-        global persistent_state
-        tlist = ['']+persistent_state.TableNames()
+        tlist = ['']+CookieManager.Persistent(self.cookie).TableNames()
         return '<fieldset id="fschoose"><legend>Existing formats</legend>'\
         '<select name="tablechoose" id="tablechoose" onChange="TableChooseChanger()"><option>{}</option></select><br>'\
         '<input type="button" onClick="TableChoose()" class="dialogbutton" id="TCSelect" value="Select" disabled><br>'\
@@ -754,8 +772,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '</fieldset>'.format('</option><option>'.join(tlist))        
 
     def _tablename( self ):
-        global persistent_state
-        tlist = persistent_state.TableNames()
+        tlist = CookieManager.Persistent( self.cookie ).TableNames()
         return '<fieldset id="fsnames"><legend>New format name</legend>'\
         '<input list="tablenames" name="tablename" id="tablename" onInput="NameChanger()"><datalist id="tablenames">{}</datalist><br>'\
         '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
