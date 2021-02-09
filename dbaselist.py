@@ -47,6 +47,7 @@ class DbaseField:
         return self._lines
             
 class dbaselist(object):
+    # only one per database name -- use __new__ to regulate this
     existing = {}
 
     def __new__( cls, filename ):
@@ -56,8 +57,14 @@ class dbaselist(object):
         return super( dbaselist, cls).__new__(cls)
     
     def __init__(self, filename):
+        # got here, so a new database
+        # add to name list
         type(self).existing[filename] = self
+
+        # open and parse database
         self.dbase_class = sqlfirst.OpenDatabase(filename)
+
+        # list of fields
         self._flist = [ DbaseField(f) for f in self.dbase_class.form['fields'] ] 
 
     @property

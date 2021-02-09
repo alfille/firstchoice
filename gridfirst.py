@@ -293,7 +293,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         elif button == 'search':
             # Search
-            active_search = searchstate.SearchState(formdict)
+            active_search = searchstate.SearchState( cookiemanager.CookieManager.GetDbaseObj(self.cookie), formdict )
             cookiemanager.CookieManager.SetSearch( self.cookie, active_search )
             searchID = active_search.first
             if searchID is None:
@@ -552,7 +552,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
         if active_search is None or active_search.length==0:
-            active_search = searchstate.SearchState({})
+            active_search = searchstate.SearchState( cookiemanager.CookieManager.GetDbaseObj(self.cookie), {} )
             cookiemanager.CookieManager.SetSearch( self.cookie, active_search )
 
         # Table contents

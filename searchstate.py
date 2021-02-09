@@ -8,7 +8,8 @@
 import sqltable
 
 class SearchState:
-    def __init__(self, dictionary):
+    def __init__(self, dbaseobj, dictionary):
+        self.dbaseobj = dbaseobj # for list of fields
         self._last_dict = self.FieldDict( dictionary )
         self._list = [ID[0] for ID in sqltable.SQL_record.SearchDict( self.last_dict )]
         self._index = -1
@@ -19,9 +20,11 @@ class SearchState:
             #print("Search list",self._list)
         
     def FieldDict( self, dictionary ):
+        # return dict with only valid fields
         d = {}
+        flist = [f.field for f in self.dbaseobj.flist]
         for k in dictionary:
-            if k in sqltable.SQL_table.field_list:
+            if k in flist:
                 d[k] = dictionary[k]
         return d
         
