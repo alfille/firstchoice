@@ -431,6 +431,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         
         # button = button name from form, translate to local index name
         self.wfile.write(
+        '<script src="introscript.js"></script>'\
         '<form id="intro" action="{}" method="post">'\
         '<fieldset class="firststyle"><legend>User</legend>'\
         '<label for="user">User name:</label><input id="user" name="user" list="users"><datalist id="users">{}</datalist>'\
@@ -438,7 +439,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '<fieldset class="firststyle"><legend>Database file</legend>'\
         '<label for="FOL">Select a first choice database</label><select name="FOL" id="FOL">{}</select>'\
         '</fieldset><br>'\
-        '<input type="submit" name="button" value="OK"></form>'.format(self.path,self._userlist(),self._filelist()).encode('utf-8') )
+        '<input type="button" id="ok" name="button" value="OK" onClick="Submitter()"></form>   <div id="processing"></div>'.format(self.path,self._userlist(),self._filelist()).encode('utf-8') )
 
     def _userlist( self ):
         #print(persistent.SQL_persistent.Userlist())

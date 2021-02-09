@@ -1,2 +1,2 @@
-// Called before table creation
+// Called to close after internal processing
 document.getElementById("ID").submit();
