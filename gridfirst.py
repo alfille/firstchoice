@@ -22,20 +22,6 @@ except:
     raise
     
 try:
-    import random
-except:
-    print("Please install the random module")
-    print("\tit should be part of the standard python3 distribution")
-    raise
-    
-try:
-    import datetime
-except:
-    print("Please install the datetime module")
-    print("\tit should be part of the standard python3 distribution")
-    raise
-    
-try:
     from http import cookies
 except:
     print("Please install the http.cookies module")
@@ -43,7 +29,7 @@ except:
     raise
     
 try:
-    import os
+    import os.path
 except:
     print("Please install the os module")
     print("\tit should be part of the standard python3 distribution")
@@ -54,172 +40,8 @@ import persistent
 import searchstate
 import sqltable
 import dbaselist
+import cookiemanager
 
-class CookieManager:
-    active_cookies = {}
-
-    @classmethod
-    def Valid( cls, cookie ):
-        session = cookie['session'].value
-        if session in cls.active_cookies:
-            ac = cls.active_cookies[session]
-            ac['time'] = datetime.time()
-            if ac['dbaseobj'] is None:
-                return False
-            return True
-        return False
-
-    @classmethod
-    def GetSession( cls, cookie ):
-        # creates an cookie entry if none exists
-        # resets clock
-        session = cookie['session'].value
-        if session in cls.active_cookies:
-            cls.active_cookies[session]['time'] = datetime.time()
-        else:
-            if len(cls.active_cookies) > 1000:
-                # Too long, trim oldest 30%
-                t = sorted([ v['time'] for v in cls.active_cookies.values() ])[300]
-                cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
-
-            # time used to trim list
-            # search is a SearchState object
-            # last is prior formdict
-            # table is list of fields and sizes
-            cls.active_cookies[session] = {
-                'dbaseobj': None,
-                'persistent': None,
-                'dbasename':'',
-                'user':'',
-                'time':datetime.time(),
-                'search':{},
-                'last' : {},
-                'table': {},
-                'current': { 'search':'default', 'table':'default', },
-                'modified': { 'search':False, 'table':False, },
-            }
-        return session
-    
-    @classmethod
-    def GetDbaseObj( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['dbaseobj']
-    
-    @classmethod
-    def SetUserDbase( cls, cookie, user, dbasename ):
-        session = cls.GetSession( cookie )
-        ac = cls.active_cookies[session]
-        ac['user'] = user
-        ac['database'] = dbasename
-
-        # database object
-        dbaseobj = dbaselist.dbaselist( dbasename )
-        ac['dbaseobj'] = dbaseobj
-
-        # persistent database
-        ac['persistent'] = persistent.SQL_persistent( user, dbasename )
-        
-        ts = ac['persistent'].GetTable('default')
-        if ts is None:
-            ts = [(sqlfirst.SqlField(f.field),"1fr") for f in dbaseobj.flist]
-            ac['persistent'].SetTable('default', ts )
-        ac['table'] = ts
-        ac['search'] = ac['persistent'].GetSearch('default')
-    
-    @classmethod
-    def Persistent( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['persistent']
-        
-
-    @classmethod
-    def GetUserDbase( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return tuple( cls.active_cookies[session][x] for x in ['user','dbasename'] )
-    
-    @classmethod
-    def SetSearch( cls, cookie, active_search ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['search'] = active_search 
-
-    @classmethod
-    def GetSearch( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['search'] 
-
-    @classmethod
-    def SetLast( cls, cookie, lastdict ):
-        session = cls.GetSession( cookie )
-        #print("setlast",lastdict) 
-        cls.active_cookies[session]['last'] = lastdict 
-
-    @classmethod
-    def GetLast( cls, cookie ):
-        session = cls.GetSession( cookie )
-        #print("getlast",cls.active_cookies[session]['last'])
-        return cls.active_cookies[session]['last']
-
-    @classmethod
-    def ResetTable( cls, cookie ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in cls.GetDbaseObj( cookie ).flist]
-        
-    @classmethod
-    def GetTable( cls, cookie ):
-        session = cls.GetSession( cookie )
-        print("GET TABLE",cls.active_cookies[session]['table'])
-        return cls.active_cookies[session]['table']
-        
-    @classmethod
-    def SetTable( cls, cookie, table ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['table'] = table
-        print("SET TABLE",cls.active_cookies[session]['table'])
-        
-    @classmethod
-    def GetTableName( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['current']['table']
-        
-    @classmethod
-    def SetTableName( cls, cookie, name ):
-        session = cls.GetSession( cookie )
-        ac = cls.active_cookies[session]
-        ac['current']['table'] = name
-        ac['modified']['table'] = False
-        ac['persistent'].SetTable( name, ac['table'] )
-        
-    @classmethod
-    def SetTableMod( cls, cookie ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['modified']['table'] = True
-        
-    @classmethod
-    def GetTableMod( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['modified']['table']
-        
-    @classmethod
-    def GetSearchName( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['current']['search']
-        
-    @classmethod
-    def SetSearchName( cls, cookie, name ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['current']['search'] = name
-        cls.active_cookies[session]['modified']['search'] = False
-        
-    @classmethod
-    def SetSearchMod( cls, cookie ):
-        session = cls.GetSession( cookie )
-        cls.active_cookies[session]['modified']['search'] = True
-        
-    @classmethod
-    def GetSearchMod( cls, cookie ):
-        session = cls.GetSession( cookie )
-        return cls.active_cookies[session]['modified']['search']
-        
 class GetHandler(http.server.BaseHTTPRequestHandler):
     buttondict = {
         'reset'    : 'Reset entries',
@@ -313,7 +135,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             # Do processing after rendering before pre-forma post is processed
             return self.SPLASH( formdict )
 
-        elif formdict['button'] == 'First' or CookieManager.GetUserDbase( self.cookie ) == ('',''):
+        elif formdict['button'] == 'First' or not cookiemanager.CookieManager.Valid( self.cookie ):
             self.wfile.write('<head>'\
                 '<link href="/introstyle.css" rel="stylesheet" type="text/css">'\
                 '</head>'.encode('utf-8'))
@@ -326,9 +148,9 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 ttype = formdict['table_type']
                 t0 = formdict['table_0']
                 t1 = formdict['table_1']
-                table = CookieManager.GetTable(self.cookie)
+                table = cookiemanager.CookieManager.GetTable(self.cookie)
                 if ttype == "reset":
-                    CookieManager.ResetTable( self.cookie )
+                    cookiemanager.CookieManager.ResetTable( self.cookie )
                 elif ttype == "cancel":
                     pass
                 elif ttype == "resize":
@@ -348,7 +170,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                         for i in range(len(table)-1,-1,-1):
                             if table[i][0] not in nlist:
                                 del(table[i])
-                        CookieManager.SetTableMod( self.cookie )
+                        cookiemanager.CookieManager.SetTableMod( self.cookie )
                 elif ttype == "move":
                     # from 0 to before 1
                     t0 = int(t0)
@@ -359,35 +181,35 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 elif ttype == "restore":
                     table.append( (t0,"1fr") )
                 elif ttype == "choose":
-                    CookieManager.SetTable( self.cookie, CookieManager.Persistent(self.cookie).GetTable(t0) )
-                    CookieManager.SetTableName( self.cookie, t0 )
+                    cookiemanager.CookieManager.SetTable( self.cookie, cookiemanager.CookieManager.Persistent(self.cookie).GetTable(t0) )
+                    cookiemanager.CookieManager.SetTableName( self.cookie, t0 )
                 elif ttype == "name":
-                    CookieManager.SetTableName( self.cookie, t0 )
+                    cookiemanager.CookieManager.SetTableName( self.cookie, t0 )
                 elif ttype == 'tremove':
                     if t0 != "default": # cannot delete default
-                        p = CookieManager.Persistent(self.cookie)
+                        p = cookiemanager.CookieManager.Persistent(self.cookie)
                         p.SetTable( t0, None ) # deletes
-                        if t0 == CookieManager.GetTableName( self.cookie ): # change existing to default
-                            CookieManager.SetTable( self.cookie, p.GetTable("default") )
-                            CookieManager.SetTableName( self.cookie, "default" )
+                        if t0 == cookiemanager.CookieManager.GetTableName( self.cookie ): # change existing to default
+                            cookiemanager.CookieManager.SetTable( self.cookie, p.GetTable("default") )
+                            cookiemanager.CookieManager.SetTableName( self.cookie, "default" )
                 elif ttype == 'trename':
-                    p = CookieManager.Persistent(self.cookie)
+                    p = cookiemanager.CookieManager.Persistent(self.cookie)
                     if t0 != t1:
                         table = p.GetTable(t0)
                         p.SetTable( t1, table )
                         if t0 != "default": # cannot delete default
                             p.SetTable( t0, None ) # deletes
-                        tcurrent = CookieManager.GetTableName( self.cookie )
+                        tcurrent = cookiemanager.CookieManager.GetTableName( self.cookie )
                         if t0 == tcurrent or t1 == tcurrent: # change current part of rename
-                            CookieManager.SetTable( self.cookie, table )
-                            CookieManager.SetTableName( self.cookie, t1 )
+                            cookiemanager.CookieManager.SetTable( self.cookie, table )
+                            cookiemanager.CookieManager.SetTableName( self.cookie, t1 )
                 elif ttype == 'widths':
                     wid = t0.split(',')
                     if len(wid) == len(table):
                         table = list(zip([t[0] for t in table],wid))
-                        tname = CookieManager.GetTableName( self.cookie )
-                        CookieManager.SetTable( self.cookie, table )
-                        CookieManager.SetTableName( self.cookie, tname ) # to clear mod
+                        tname = cookiemanager.CookieManager.GetTableName( self.cookie )
+                        cookiemanager.CookieManager.SetTable( self.cookie, table )
+                        cookiemanager.CookieManager.SetTableName( self.cookie, tname ) # to clear mod
                             
             self.wfile.write('<head>'\
                 '<link href="/tablestyle.css" rel="stylesheet" type="text/css">'\
@@ -401,7 +223,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 '<link href="/formstyle.css" rel="stylesheet" type="text/css">'\
                 '</head>'.encode('utf-8'))
             if formdict['button'] == type(self).buttondict['reset']:
-                formdict = CookieManager.GetLast(self.cookie)
+                formdict = cookiemanager.CookieManager.GetLast(self.cookie)
                 formdict['button'] = 'Edit' # No infinite loop
             self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
             self.wfile.write('<body>'.encode('utf-8'))
@@ -438,7 +260,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         #  Opens native database
         #  Parses database
         #  Sets field lists
-        CookieManager.SetUserDbase( self.cookie, user,filename )
+        cookiemanager.CookieManager.SetUserDbase( self.cookie, user,filename )
 
     def FORM( self, formdict ):
         # After a "POST" --- clicking one of the submit buttons
@@ -458,7 +280,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         # default inactive buttons
         deactbut = ['reset']
 
-        active_search = CookieManager.GetSearch(self.cookie)
+        active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
 
         if button == 'research':
             # Modify Last Search
@@ -472,7 +294,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         elif button == 'search':
             # Search
             active_search = searchstate.SearchState(formdict)
-            CookieManager.SetSearch( self.cookie, active_search )
+            cookiemanager.CookieManager.SetSearch( self.cookie, active_search )
             searchID = active_search.first
             if searchID is None:
                 # no matches
@@ -561,7 +383,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             self._statusBar( formdict, 'Welcome')
             
         formdict['button'] = 'Edit'    
-        CookieManager.SetLast(self.cookie, formdict )
+        cookiemanager.CookieManager.SetLast(self.cookie, formdict )
 
         if '_ID' not in formdict:
             formdict['_ID'] = None
@@ -592,7 +414,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         
         # Fields
         self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
-        for f in CookieManager.GetDbaseObj( self.cookie ).flist:
+        for f in cookiemanager.CookieManager.GetDbaseObj( self.cookie ).flist:
             self._textfield( f,formdict[f.field] )
         self.wfile.write( ('</div>').encode('utf-8') )
 
@@ -658,7 +480,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write('<script src="tablescript1.js"></script>'.encode('utf-8') )
 
         # Get field list
-        table = CookieManager.GetTable(self.cookie)
+        table = cookiemanager.CookieManager.GetTable(self.cookie)
 
         # Computed style type because the number and size of columnms varies (rest in tablestyle.css file)
         self.wfile.write(
@@ -692,8 +514,8 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write('<div class="tallflex">'.encode('utf-8') )        
 
         #dialog (hidden)
-        table_now = CookieManager.GetTableName(self.cookie)
-        if CookieManager.GetTableMod(self.cookie):
+        table_now = cookiemanager.CookieManager.GetTableName(self.cookie)
+        if cookiemanager.CookieManager.GetTableMod(self.cookie):
             table_now += " (modified)"
         self.wfile.write(
             '<div id="tabledialog">'\
@@ -727,10 +549,10 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 '<span class="shead" draggable="true" onDragStart="dragStart(event,{})" onDragEnd="dragEnd(event)">{}</span>'\
                 '</div>'.format(i,i,i,sqlfirst.PrintField(table[i][0])).encode('utf-8') )
 
-        active_search = CookieManager.GetSearch(self.cookie)
+        active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
         if active_search is None or active_search.length==0:
             active_search = searchstate.SearchState({})
-            CookieManager.SetSearch( self.cookie, active_search )
+            cookiemanager.CookieManager.SetSearch( self.cookie, active_search )
 
         # Table contents
         stripe = False
@@ -756,14 +578,14 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
     def _tablefields( self, table ):
         flist = [f[0] for f in table]
         checked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={}  onChange="FieldChanger()" checked><label for="{}">{}</label>'.format("c_"+f,f,"c_"+f,sqlfirst.PrintField(f)) for f in flist])
-        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in CookieManager.GetDbaseObj(self.cookie).flist if f.field not in flist])
+        unchecked = '<br>'.join(['<input type="checkbox" id="{}" name="dfield" value={} onChange="FieldChanger()"><label for="{}">{}</label>'.format("c_"+f.field,f.field,"c_"+f.field,sqlfirst.PrintField(f.field)) for f in cookiemanager.CookieManager.GetDbaseObj(self.cookie).flist if f.field not in flist])
         return '<fieldset id="fsfields"><legend>Choose fields shown</legend>{}'\
         '<button type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" disabled>Ok</button>'\
         '</fieldset>'.format('<br>'.join([checked,unchecked]))
         #'<input type="button" onClick="fSelect()" id="tablefieldok" class="dialogbutton" value="Ok" disabled>'\
 
     def _tablechoose( self ):
-        tlist = ['']+CookieManager.Persistent(self.cookie).TableNames()
+        tlist = ['']+cookiemanager.CookieManager.Persistent(self.cookie).TableNames()
         return '<fieldset id="fschoose"><legend>Existing formats</legend>'\
         '<select name="tablechoose" id="tablechoose" onChange="TableChooseChanger()"><option>{}</option></select><br>'\
         '<input type="button" onClick="TableChoose()" class="dialogbutton" id="TCSelect" value="Select" disabled><br>'\
@@ -772,7 +594,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '</fieldset>'.format('</option><option>'.join(tlist))        
 
     def _tablename( self ):
-        tlist = CookieManager.Persistent( self.cookie ).TableNames()
+        tlist = cookiemanager.CookieManager.Persistent( self.cookie ).TableNames()
         return '<fieldset id="fsnames"><legend>New format name</legend>'\
         '<input list="tablenames" name="tablename" id="tablename" onInput="NameChanger()"><datalist id="tablenames">{}</datalist><br>'\
         '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
@@ -867,22 +689,23 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
     def CSV( self ):
         self._get_cookie()
-        table = CookieManager.GetTable(self.cookie)
-        active_search = CookieManager.GetSearch(self.cookie)
-        fields = [f[0] for f in table]
+        if cookiemanager.CookieManager.Valid( self.cookie ):
+            table = cookiemanager.CookieManager.GetTable(self.cookie)
+            active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
+            fields = [f[0] for f in table]
 
-        # Begin the response
-        self.send_response(200)
-        self.send_header('Content-Type',
-                         'text/csv; charset=utf-8')
-        self.end_headers()
+            # Begin the response
+            self.send_response(200)
+            self.send_header('Content-Type',
+                             'text/csv; charset=utf-8')
+            self.end_headers()
 
-        #header row
-        self.wfile.write( self.CSVrow( [sqlfirst.PrintField(f) for f in fields] ) )
+            #header row
+            self.wfile.write( self.CSVrow( [sqlfirst.PrintField(f) for f in fields] ) )
 
-        #data rows
-        for r in sqltable.SQL_record.SortedSearchDict( fields, active_search.last_dict ):
-            self.wfile.write(self.CSVrow(r[1:])) # First field is _ID -- skip
+            #data rows
+            for r in sqltable.SQL_record.SortedSearchDict( fields, active_search.last_dict ):
+                self.wfile.write(self.CSVrow(r[1:])) # First field is _ID -- skip
 
     def _get_cookie( self ):
         head_cook = self.headers.get('Cookie')
@@ -901,11 +724,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         #print("Cookie=> ","done")
 
     def _set_cookie( self ):
-        expiration = datetime.datetime.now() + datetime.timedelta(days=7)
-        self.cookie = cookies.SimpleCookie()
-        self.cookie["session"] = random.randint(1,1000000000)
-        self.cookie["session"]["expires"] = expiration.strftime("%a, %d-%b-%Y %H:%M:%S EST")
-#        cookie["session"]["samesite"] = "Strict"
+        self.cookie = cookiemanager.CookieManager.NewSession()
 
 if __name__ == '__main__':
     
