@@ -28,10 +28,11 @@ class SQL_persistent:
         # open or create database
         self.user = user
         self.filename = filename
-        self.connection = type(self).Connect()
+        self.connection = type(self)._Connect()
 
     @classmethod
-    def Connect( cls ):
+    def _Connect( cls ):
+        # class method because filelist and userlist are class methods
         connection = sqlite3.connect('persistent.db')
         if ArgSQL > 0:
             print('CREATE TABLE IF NOT EXISTS persistent (user TEXT NOT NULL, filename TEXT NOT NULL, ptype TEXT NOT NULL, NAME TEXT  NOT NULL, jsondata TEXT)' )
@@ -46,7 +47,7 @@ class SQL_persistent:
 
     @classmethod
     def Userlist( cls ):
-        connection = cls.Connect()
+        connection = cls._Connect()
         if ArgSQL > 0:
             print('SELECT DISTINCT user FROM persistent ORDER BY user')
         cursor = connection.cursor()
@@ -55,21 +56,21 @@ class SQL_persistent:
 
     @classmethod
     def Filelist( cls ):
-        connection = cls.Connect()
+        connection = cls._Connect()
         if ArgSQL > 0:
             print('SELECT DISTINCT filename FROM persistent ORDER BY filename')
         cursor = connection.cursor()
         files = cursor.execute('SELECT DISTINCT filename FROM persistent ORDER BY filename' ).fetchall()
         return [f[0] for f in files]
 
-    def NameList( self, ptype ):
+    def _NameList( self, ptype ):
         if ArgSQL > 0:
             print('SELECT name FROM persistent WHERE user=? AND filename=? AND ptype=?',(self.user,self.filename,ptype) )
         cursor = self.connection.cursor()
         nm = cursor.execute('SELECT name FROM persistent WHERE user=? AND filename=? AND ptype=?',(self.user,self.filename,ptype) ).fetchall()
         return [n[0] for n in nm]
 
-    def SetField( self, name, ptype, data ):
+    def _SetField( self, name, ptype, data ):
         if data is None:
             #Do a DELETE !
             if ArgSQL > 0:
@@ -85,7 +86,7 @@ class SQL_persistent:
             cursor.execute('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
             self.connection.commit()
 
-    def GetField( self, name, ptype ):
+    def _GetField( self, name, ptype ):
         if ArgSQL > 0:
             print('SELECT jsondata FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
         cursor = self.connection.cursor()
@@ -95,21 +96,21 @@ class SQL_persistent:
         return None
 
     def SearchNames( self ):
-        return self.NameList("search")
+        return self._NameList("search")
 
     def SetSearch( self, name, searchdict ):
-        self.SetField( name, "search", searchdict )
+        self._SetField( name, "search", searchdict )
         
     def GetSearch( self, name ):
-        return self.GetField( name, "search" )
+        return self._GetField( name, "search" )
         
     def TableNames( self ):
-        return self.NameList("table")
+        return self._NameList("table")
 
     def SetTable( self, name, table ):
-        self.SetField( name, "table", table )
+        self._SetField( name, "table", table )
         
     def GetTable( self, name ):
-        return self.GetField( name, "table" )
+        return self._GetField( name, "table" )
         
 

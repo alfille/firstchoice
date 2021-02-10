@@ -75,4 +75,7 @@ class dbaselist(object):
     @classmethod
     def filelist( cls ):
         return glob.glob('../**/*.fol',recursive=True) + glob.glob('../**/*.FOL',recursive=True)
+
+    def __del__(self):
+        sqlfirst.SaveDatabase( self.dbase_class, "backup.FOL" )
     

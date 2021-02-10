@@ -10,7 +10,7 @@ import sqltable
 class SearchState:
     def __init__(self, dbaseobj, dictionary):
         self.dbaseobj = dbaseobj # for list of fields
-        self._last_dict = self.FieldDict( dictionary )
+        self._last_dict = self._FieldDict( dictionary )
         self._list = [ID[0] for ID in sqltable.SQL_record.SearchDict( self.last_dict )]
         self._index = -1
         if self._list is None:
@@ -19,7 +19,7 @@ class SearchState:
             self._length = len(self._list)
             #print("Search list",self._list)
         
-    def FieldDict( self, dictionary ):
+    def _FieldDict( self, dictionary ):
         # return dict with only valid fields
         d = {}
         flist = [f.field for f in self.dbaseobj.flist]
@@ -48,7 +48,7 @@ class SearchState:
 
         self._index += 1
 
-        return self.index_check()
+        return self._index_check()
     
     @property
     def back( self ):
@@ -57,9 +57,9 @@ class SearchState:
 
         self._index -= 1
 
-        return self.index_check()
+        return self._index_check()
 
-    def index_check( self ):
+    def _index_check( self ):
         if self._index < 0:
             self._index = 0
         elif self._index >= self.length:
