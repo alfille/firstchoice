@@ -38,7 +38,6 @@ except:
 import sqlfirst
 import persistent
 import searchstate
-import sqltable
 import dbaselist
 import cookiemanager
 
@@ -75,10 +74,11 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
     def _statusBar( self, formdict, text=''  ):
         self.wfile.write('<DIV id="head-grid" class="firststyle">'.encode('utf-8') )
 
-        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(sqltable.SQL_record.total).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(sqltable.SQL_record.added).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Changed: {}</DIV>'.format(sqltable.SQL_record.updated).encode('utf-8') )
-        self.wfile.write('<DIV class="hcell">Deleted: {}</DIV>'.format(sqltable.SQL_record.deleted).encode('utf-8') )
+        st = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
+        self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(st.total).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(st.added).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Changed: {}</DIV>'.format(st.updated).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell">Deleted: {}</DIV>'.format(st.deleted).encode('utf-8') )
 
         if '_ID' in formdict:
             self.wfile.write('<DIV class="hcell">Record = {}</DIV>'.format(formdict['_ID']).encode('utf-8') )
@@ -281,6 +281,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         deactbut = ['reset']
 
         active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
+        sqltab = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
 
         if button == 'research':
             # Modify Last Search
@@ -302,7 +303,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 deactbut += ['search']
                 actbut.remove('search')
             else:
-                formdict = sqltable.SQL_record.IDtoDict(searchID)                
+                formdict = sqltab.IDtoDict(searchID)                
                 self._searchBar( formdict,active_search )
 
         elif button == 'next':
@@ -314,7 +315,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
-                    formdict = sqltable.SQL_record.IDtoDict(searchID)                
+                    formdict = sqltab.IDtoDict(searchID)                
                     self._searchBar( formdict,active_search )
                 
         elif button == 'back':
@@ -326,23 +327,23 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 if searchID is None:
                     self._statusBar( {},'Search: Not Found')
                 else:
-                    formdict = sqltable.SQL_record.IDtoDict(searchID)                
+                    formdict = sqltab.IDtoDict(searchID)                
                     self._searchBar( formdict,active_search )
                 
         elif button == 'add':
             # Add a Record
-            if sqltable.SQL_record.IsEmpty( formdict ):
+            if sqltab.IsEmpty( formdict ):
                 self._statusBar( formdict, 'Empty record not added')
                 formdict['_Id'] = None
             else:
-                addID = sqltable.SQL_record.Insert( first.SQL_record.DicttoTup(formdict) )                
-                formdict = sqltable.SQL_record.IDtoDict( addID )                
+                addID = sqltab.Insert( sqltab.DicttoTup(formdict) )                
+                formdict = sqltab.IDtoDict( addID )                
                 self._statusBar( formdict, 'Record Added')
 
         elif button == 'save':
             # Update a Record
             if '_ID' in formdict and formdict['_ID'] is not None:
-                formdict['_ID'] = first.SQL_record.Update( formdict['_ID'], first.SQL_record.DicttoTup(formdict) )                
+                formdict['_ID'] = sqltab.Update( formdict['_ID'], sqltab.DicttoTup(formdict) )                
                 self._statusBar( formdict, 'Record Updated')
             else:
                 self._statusBar( formdict, 'Record should be <U>Added</U>')
@@ -366,14 +367,14 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             if '_ID' not in formdict or formdict['_ID'] is None:
                 self._statusBar( formdict, 'Delete only valid for an existing record')
             else:
-                sqltable.SQL_record.Delete( formdict['_ID'])
+                sqltab.Delete( formdict['_ID'])
                 formdict['_ID'] = None
                 self._statusBar( formdict, 'Record deleted')
 
         elif button == 'id':
             # Back from Table with just record Id -- need to populate
             if '_ID' in formdict and formdict['_ID'] is not None:
-                formdict = sqltable.SQL_record.IDtoDict( formdict['_ID'] )
+                formdict = sqltab.IDtoDict( formdict['_ID'] )
                 self._statusBar( formdict, "Record selected" )
             else:
                 self._statusBar( formdict, "Record not selected" )
@@ -404,7 +405,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 # valid search
                 actbut += ['next','back']
 
-        sqltable.SQL_record.PadFields( formdict )
+        sqltab.PadFields( formdict )
 
         self.wfile.write('<script src="formscript.js"></script>'.encode('utf-8') )
         self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
@@ -442,7 +443,6 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '<input type="button" id="ok" name="button" value="OK" onClick="Submitter()"></form>   <div id="processing"></div>'.format(self.path,self._userlist(),self._filelist()).encode('utf-8') )
 
     def _userlist( self ):
-        #print(persistent.SQL_persistent.Userlist())
         return '<option value="default" select>'+''.join('<option value="{}">'.format(u) for u in persistent.SQL_persistent.Userlist() )
         
     def _filelist( self ):
@@ -482,6 +482,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         # Get field list
         table = cookiemanager.CookieManager.GetTable(self.cookie)
+        dbaseobj = cookiemanager.CookieManager.GetDbaseObj( self.cookie )
 
         # Computed style type because the number and size of columnms varies (rest in tablestyle.css file)
         self.wfile.write(
@@ -552,13 +553,13 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
         if active_search is None or active_search.length==0:
-            active_search = searchstate.SearchState( cookiemanager.CookieManager.GetDbaseObj(self.cookie), {} )
+            active_search = searchstate.SearchState( dbaseobj, {} )
             cookiemanager.CookieManager.SetSearch( self.cookie, active_search )
 
         # Table contents
         stripe = False
 
-        full_list = sqltable.SQL_record.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
+        full_list = dbaseobj.SQLtable.SortedSearchDict( [f[0] for f in table], active_search.last_dict )
         for r in full_list:
             i = r[0]
             stripe = not stripe
@@ -705,7 +706,8 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write( self.CSVrow( [sqlfirst.PrintField(f) for f in fields] ) )
 
             #data rows
-            for r in sqltable.SQL_record.SortedSearchDict( fields, active_search.last_dict ):
+            sqltab = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
+            for r in sqltab.SortedSearchDict( fields, active_search.last_dict ):
                 self.wfile.write(self.CSVrow(r[1:])) # First field is _ID -- skip
 
     def _get_cookie( self ):

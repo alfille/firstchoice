@@ -68,6 +68,11 @@ class dbaselist(object):
         self._flist = [ DbaseField(f) for f in self.dbase_class.form['fields'] ] 
 
     @property
+    def SQLtable( self ):
+        # avoid one level of indirection
+        return self.dbase_class.SQLtable
+
+    @property
     def flist( self ) :
         # field list of DbaseField objects
         return self._flist

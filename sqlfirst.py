@@ -34,14 +34,12 @@ class SQL_FOL_handler(first.FOL_handler):
 
         super().__init__( FOLfile,  FOLout, **kwargs)
 
-        sqltable.SQL_table.Prepare( sqlfile )
-        
         # Create new table
         self.Fields()
-        sqltable.SQL_table.Create( self.fields )
+        self.SQLtable = sqltable.SQL_table( sqlfile, self.fields )
 
         # Put all FOL data into SQL table
-        sqltable.SQL_table.AllDataPut(self.data)
+        self.SQLtable.AllDataPut(self.data)
 
         
     def Fields( self ):
@@ -49,7 +47,7 @@ class SQL_FOL_handler(first.FOL_handler):
         #print(self.fields)
 
     def Write( self ):
-        self.data = sqltable.SQL_table.AllDataGet()
+        self.data = self.SQLtable.AllDataGet()
         super().Write()
 
 if __name__ == '__main__':
