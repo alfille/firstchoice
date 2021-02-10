@@ -25,6 +25,121 @@ import sqlfirst
 import persistent
 import dbaselist
 
+class CookieObject:
+    def __init__( self ):
+        self._dbaseobj   = None
+        self._persistent = None
+        self._dbasename  = ''
+        self._user       = ''
+        self._time       = datetime.time()
+        self._search     = {}
+        self._last       = {}
+        self._table      = {}
+        self._current    = { 'search':'default', 'table':'default', }
+        self._modified   = { 'search':False, 'table':False, }
+
+    @property
+    def UserDbase( self ):
+        # returns a tuple
+        return (self._user,self._dbasename)
+
+    @UserDbase.setter
+    def UserDbase( self, user_file ):
+        # takes a tuple
+        self._user, self._dbasename = user_file
+
+        # database object
+        self._dbaseobj = dbaselist.dbaselist( user_file[1] )
+        #print("DBASEOBJ",self._dbaseobj, user_file )
+
+        # persistent database
+        self._persistent = persistent.SQL_persistent( *user_file )
+        
+        ts = self._persistent.GetTable('default')
+        if ts is None:
+            ts = [(sqlfirst.SqlField(f.field),"1fr") for f in self._dbaseobj.flist]
+            self._persistent.SetTable('default', ts )
+        self._table = ts
+        self._search = self._persistent.GetSearch('default')
+
+    @property
+    def dbaseobj( self ):
+        return self._dbaseobj
+
+    @dbaseobj.setter
+    def dbaseobj( self, dbaseobj ):
+        self._dbaseobj = dbaseobj
+
+    @property
+    def persistent( self ):
+        return self._persistent
+
+    @persistent.setter
+    def persistent( self, persistent ):
+        self._persistent = persistent
+
+    @property
+    def last( self ):
+        return self._last
+
+    @last.setter
+    def last( self, last ):
+        self._last = last
+
+    @property
+    def table( self ):
+        return self._table
+
+    @table.setter
+    def table( self, table ):
+        self._table = table
+
+    @property
+    def tablename( self ):
+        return self._current['table']
+
+    @tablename.setter
+    def tablename( self, name ):
+        self._modified['table'] = False
+        self._persistent.SetTable( name, self._table )
+        self._current['table'] = name
+
+    @property
+    def tablemod( self ):
+        return self._modified['table']
+
+    @tablemod.setter
+    def tablemod( self, mod ):
+        self._modified['table'] = mod
+
+    @property
+    def search( self ):
+        return self._search
+
+    @search.setter
+    def search( self, search ):
+        self._search = search
+
+    @property
+    def searchname( self ):
+        return self._current['search']
+
+    @searchname.setter
+    def searchname( self, name ):
+        self._current['search'] = name
+        self._modified['search'] = False
+        self._persistent.SetSearch( name, self._search )
+
+    @property
+    def searchmod( self ):
+        return self._modified['search']
+
+    @searchmod.setter
+    def searchmod( self, mod ):
+        self._modified['search'] = mod
+
+    
+
 class CookieManager:
     # List of all cookie sessions
     # essentially users since last startup
@@ -34,15 +149,20 @@ class CookieManager:
     @classmethod
     def Valid( cls, cookie ):
         if cookie is None:
+            #print("BAD COOKIE")
             return False
+
         session = cookie['session'].value
-        if session in cls.active_cookies:
-            sdict = cls.active_cookies[session]
-            sdict['time'] = datetime.time()
-            if sdict['dbaseobj'] is None:
-                return False
-            return True
-        return False
+        if session not in cls.active_cookies:
+            #print("BAD SESSION")
+            return False
+
+        if cls.active_cookies[session].dbaseobj is None:
+            #print("BAD DBASEOBJ")
+            return False
+
+        #print("GOOD COOKIE")
+        return True
 
     @classmethod
     def _reexpire( cls ):
@@ -51,161 +171,105 @@ class CookieManager:
 
     @classmethod
     def NewSession( cls ):
+        #print("NEW COOKIE")
         # Make the cookie
         cookie = cookies.SimpleCookie()
-        cookie["session"] = str(random.randint(1,1000000000))+datetime.datetime.now.ctime()
+        cookie["session"] = random.randint(1,1000000000)
+        #cookie["session"] = str(random.randint(1,1000000000))+datetime.datetime.now.ctime()
         cookie["session"]["expires"] = cls._reexpire()
 
         # Initialize and Add to list
-        cls._GetSessionDict(cookie) 
+        cls._GetCookieObj(cookie) 
 
         # return cookie
         return cookie
 
     @classmethod
-    def _GetSessionDict( cls, cookie ):
+    def _GetCookieObj( cls, cookie ):
         # creates an cookie entry if none exists
         # resets clock
         #
         # return active_cookie[session]
         
-        session = cookie['session'].value
-        if session in cls.active_cookies:
-            cls.active_cookies[session]['time'] = datetime.time()
-        else:
-            if len(cls.active_cookies) > 1000:
-                # Too long, trim oldest 30%
-                t = sorted([ v['time'] for v in cls.active_cookies.values() ])[300]
-                cls.active_cookies = { s:cls.active_cookies[s] for s in cls.active_cookies and cls.active_cookies[s]['time'] > t }
-
-            # time used to trim list
-            # search is a SearchState object
-            # last is prior formdict
-            # table is list of fields and sizes
-            cls.active_cookies[session] = {
-                'dbaseobj': None,
-                'persistent': None,
-                'dbasename':'',
-                'user':'',
-                'time':datetime.time(),
-                'search':{},
-                'last' : {},
-                'table': {},
-                'current': { 'search':'default', 'table':'default', },
-                'modified': { 'search':False, 'table':False, },
-            }
+        session = cookie["session"].value
+        if session not in cls.active_cookies:
+            cls.active_cookies[session] =  CookieObject()
         return cls.active_cookies[session]
     
     @classmethod
     def GetDbaseObj( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['dbaseobj']
+        return cls._GetCookieObj( cookie ).dbaseobj
     
     @classmethod
     def SetUserDbase( cls, cookie, user, dbasename ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['user'] = user
-        sdict['database'] = dbasename
-
-        # database object
-        dbaseobj = dbaselist.dbaselist( dbasename )
-        sdict['dbaseobj'] = dbaseobj
-
-        # persistent database
-        sdict['persistent'] = persistent.SQL_persistent( user, dbasename )
-        
-        ts = sdict['persistent'].GetTable('default')
-        if ts is None:
-            ts = [(sqlfirst.SqlField(f.field),"1fr") for f in dbaseobj.flist]
-            sdict['persistent'].SetTable('default', ts )
-        sdict['table'] = ts
-        sdict['search'] = sdict['persistent'].GetSearch('default')
+        cls._GetCookieObj( cookie ).UserDbase = ( user, dbasename )
     
     @classmethod
     def Persistent( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['persistent']
+        return cls._GetCookieObj( cookie ).persistent
         
 
     @classmethod
     def GetUserDbase( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return tuple( sdict[x] for x in ['user','dbasename'] )
+        return cls._GetCookieObj( cookie ).UserDbase
     
     @classmethod
     def SetSearch( cls, cookie, active_search ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['search'] = active_search 
+        cls._GetCookieObj( cookie ).search = active_search 
 
     @classmethod
     def GetSearch( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['search'] 
+        return cls._GetCookieObj( cookie ).search
 
     @classmethod
     def SetLast( cls, cookie, lastdict ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['last'] = lastdict 
+        cls._GetCookieObj( cookie ).last = lastdict
 
     @classmethod
     def GetLast( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['last']
+        return cls._GetCookieObj( cookie ).last
 
     @classmethod
     def ResetTable( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['table']=[(sqlfirst.SqlField(f.field),"1fr") for f in sdict['dbaseobj'].flist]
+        c_obj = cls._GetCookieObj( cookie )
+        c_obj.table = [(sqlfirst.SqlField(f.field),"1fr") for f in c_obj.dbaseobj.flist]
         
     @classmethod
     def GetTable( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['table']
+        return cls._GetCookieObj( cookie ).table
         
     @classmethod
     def SetTable( cls, cookie, table ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['table'] = table
+        cls._GetCookieObj( cookie ).table = table
         
     @classmethod
     def GetTableName( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['current']['table']
+        return cls._GetCookieObj( cookie ).tablename
         
     @classmethod
     def SetTableName( cls, cookie, name ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['current']['table'] = name
-        sdict['modified']['table'] = False
-        sdict['persistent'].SetTable( name, sdict['table'] )
+        cls._GetCookieObj( cookie ).tablename = name
         
     @classmethod
     def SetTableMod( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['modified']['table'] = True
+        cls._GetCookieObj( cookie ).tablemod = True
         
     @classmethod
     def GetTableMod( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['modified']['table']
+        return cls._GetCookieObj( cookie ).tablemod
         
     @classmethod
     def GetSearchName( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['current']['search']
+        return cls._GetCookieObj( cookie ).searchname
         
     @classmethod
     def SetSearchName( cls, cookie, name ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['current']['search'] = name
-        sdict['modified']['search'] = False
+        cls._GetCookieObj( cookie ).searchname = name
         
     @classmethod
     def SetSearchMod( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        sdict['modified']['search'] = True
+        cls._GetCookieObj( cookie ).searchmod = True
         
     @classmethod
     def GetSearchMod( cls, cookie ):
-        sdict = cls._GetSessionDict( cookie )
-        return sdict['modified']['search']
+        return cls._GetCookieObj( cookie ).searchmod
