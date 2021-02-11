@@ -23,3 +23,7 @@ function DeleteRecord() {
         document.getElementById("mainform").submit();
         }
 };
+function Intro() {
+    document.getElementById("bintro").value = "Intro";
+    document.getElementById("fintro").submit();
+};

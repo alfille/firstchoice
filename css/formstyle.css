@@ -24,21 +24,38 @@ textarea, input {
     }
 #head-grid {
     display: grid;
+    font-size: 1rem;
     grid-template-columns: auto auto auto auto;
     background-color: #CC00CC;
     color: #CC00CC;
-    grid-gap: 6px;
+    grid-gap: 3px;
 }
 .hcell {
     background-color:#0000A9;
     color: #00A9A9;
 }    
-.hcellbig {
+.hcell2a {
+    background-color:#0000A9;
+    color: #00A9A9;
+    grid-column-start: 1;
+    grid-column-end: 3;
+}    
+.hcell2b {
+    background-color:#0000A9;
+    color: #00A9A9;
+    grid-column-start: 3;
+    grid-column-end: 5;
+}    
+.hcell3 {
     background-color:#0000A9;
     color: #00A9A9;
     grid-column-start: 2;
     grid-column-end: 5;
-}    
+}
+.hbutton {
+    background-color:#00A9A9;
+    font-size:1rem;
+    }
 #form-grid {
     display: grid;
     grid-template-columns: 13rem 80rem;

@@ -175,7 +175,6 @@ class CookieManager:
         # Make the cookie
         cookie = cookies.SimpleCookie()
         cookie["session"] = random.randint(1,1000000000)
-        #cookie["session"] = str(random.randint(1,1000000000))+datetime.datetime.now.ctime()
         cookie["session"]["expires"] = cls._reexpire()
 
         # Initialize and Add to list

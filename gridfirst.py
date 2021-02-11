@@ -74,6 +74,10 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
     def _statusBar( self, formdict, text=''  ):
         self.wfile.write('<DIV id="head-grid" class="firststyle">'.encode('utf-8') )
 
+        ud = cookiemanager.CookieManager.GetUserDbase( self.cookie )
+        self.wfile.write('<DIV class="hcell2a">User: <input type="button" class="hbutton" onClick="Intro()" value="{}"></DIV>'.format(ud[0]).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell2b">Database: <input type="button" class="hbutton" onClick="Intro()" value="{}"></DIV>'.format(ud[1]).encode('utf-8') )
+
         st = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
         self.wfile.write('<DIV class="hcell">Total: {}</DIV>'.format(st.total).encode('utf-8') )
         self.wfile.write('<DIV class="hcell">Added: {}</DIV>'.format(st.added).encode('utf-8') )
@@ -84,7 +88,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write('<DIV class="hcell">Record = {}</DIV>'.format(formdict['_ID']).encode('utf-8') )
         else:
             self.wfile.write('<DIV class="hcell">Not in database</DIV>'.encode('utf-8') )
-        self.wfile.write('<DIV class="hcellbig">{}</DIV>'.format(text).encode('utf-8') )
+        self.wfile.write('<DIV class="hcell3">{}</DIV>'.format(text).encode('utf-8') )
         self.wfile.write('</DIV>'.encode('utf-8') )
     
     def do_GET(self):
@@ -99,7 +103,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         self._get_cookie()
 
-        self.PAGE({'button':'First'})
+        self.PAGE({'button':'Intro'})
 
 
     def do_POST(self):
@@ -125,6 +129,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self._head()            
        
         # Send to record or table view
+        print("PAGE PAGE",formdict)
 
         # Note: initial entry is from "GET" -- with empty formdict        
         if 'button' not in formdict:
@@ -135,7 +140,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             # Do processing after rendering before pre-forma post is processed
             return self.SPLASH( formdict )
 
-        elif formdict['button'] == 'First' or not cookiemanager.CookieManager.Valid( self.cookie ):
+        elif formdict['button'] == 'Intro' or not cookiemanager.CookieManager.Valid( self.cookie ):
             self.wfile.write('<head>'\
                 '<link href="/introstyle.css" rel="stylesheet" type="text/css">'\
                 '</head>'.encode('utf-8'))
@@ -251,7 +256,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             '</form>'.format(self.path).encode('utf-8') )
 
         self.wfile.write(
-            '<div id="splash" class="firststyle"><h2>loading database {}...</h2></div>'\
+            '<div id="splash" class="firststyle">loading database {}...</div>'\
             '<script src="splashscript.js"></script>'\
             '</body>'.format(filename).encode('utf-8') )
 
@@ -282,6 +287,12 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
         sqltab = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
+
+        # hidden form choose a line for FORM
+        self.wfile.write(
+            '<form action={} method="post" id="fintro">'\
+            '<input type="hidden" id="bintro" name="button" value="">'\
+            '</form>'.format(self.path).encode('utf-8') )
 
         if button == 'research':
             # Modify Last Search
@@ -407,11 +418,13 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         sqltab.PadFields( formdict )
 
+        # script
         self.wfile.write('<script src="formscript.js"></script>'.encode('utf-8') )
+
+        # main form
         self.wfile.write('<br><form action="{}" method="post" id="mainform">'.format(self.path).encode('utf-8') )
         if formdict['_ID'] is not None:
             self.wfile.write( '<input type="hidden" name="_ID" value="{}" >'.format(formdict['_ID']).encode('utf-8') )
-
         
         # Fields
         self.wfile.write('<div id="form-grid" class="firststyle">'.format(self.path).encode('utf-8') )
@@ -441,6 +454,10 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '<label for="FOL">Select a first choice database</label><select name="FOL" id="FOL">{}</select>'\
         '</fieldset><br>'\
         '<input type="button" id="ok" name="button" value="OK" onClick="Submitter()"></form>   <div id="processing"></div>'.format(self.path,self._userlist(),self._filelist()).encode('utf-8') )
+
+        if cookiemanager.CookieManager.Valid( self.cookie ):
+            ud = cookiemanager.CookieManager.GetUserDbase( self.cookie )
+            self.wfile.write('<script>document.getElementById("user").value="{}";document.getElementById("FOL").value="{}";</script>'.format(ud[0],ud[1]).encode('utf-8') )
 
     def _userlist( self ):
         return '<option value="default" select>'+''.join('<option value="{}">'.format(u) for u in persistent.SQL_persistent.Userlist() )
