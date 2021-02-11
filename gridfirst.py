@@ -48,7 +48,8 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         'search'   : 'Search',
         'savesearch': 'Save search',
         'getsearch': 'Get search',
-        'research' : 'Modify search',
+        'research' : 'Modify',
+        'searchdg' : 'Search list',
         'next'     : 'Next',
         'back'     : 'Back',
         'save'     : 'Update',
@@ -223,6 +224,45 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write('<body>'.encode('utf-8') )
             self.TABLE()
 
+        elif formdict['button'] == type(self).buttondict['search'] and "search_type" in formdict:
+            ttype = formdict['search_type']
+            t0 = formdict['search_0']
+            t1 = formdict['search_1']
+            search = cookiemanager.CookieManager.GetSearch(self.cookie)
+            if ttype == "choose":
+                cookiemanager.CookieManager.SetSearch( self.cookie, cookiemanager.CookieManager.Persistent(self.cookie).GetSearch(t0) )
+                cookiemanager.CookieManager.SetSearchName( self.cookie, t0 )
+            elif ttype == "name":
+                cookiemanager.CookieManager.SetSearchName( self.cookie, t0 )
+            elif ttype == 'sremove':
+                if t0 != "default": # cannot delete default
+                    p = cookiemanager.CookieManager.Persistent(self.cookie)
+                    p.SetSearch( t0, None ) # deletes
+                    if t0 == cookiemanager.CookieManager.GetSearchName( self.cookie ): # change existing to default
+                        cookiemanager.CookieManager.SetSearch( self.cookie, p.GetSearch("default") )
+                        cookiemanager.CookieManager.SetSearchName( self.cookie, "default" )
+            elif ttype == 'srename':
+                p = cookiemanager.CookieManager.Persistent(self.cookie)
+                if t0 != t1:
+                    table = p.GetSearch(t0)
+                    p.SetSearch( t1, search )
+                    if t0 != "default": # cannot delete default
+                        p.SetSearch( t0, None ) # deletes
+                    tcurrent = cookiemanager.CookieManager.GetSearchName( self.cookie )
+                    if t0 == tcurrent or t1 == tcurrent: # change current part of rename
+                        cookiemanager.CookieManager.SetSearch( self.cookie, table )
+                        cookiemanager.CookieManager.SetSearchName( self.cookie, t1 )
+                            
+            self.wfile.write('<head>'\
+                '<link href="/formstyle.css" rel="stylesheet" type="text/css">'\
+                '</head>'.encode('utf-8'))
+            if formdict['button'] == type(self).buttondict['reset']:
+                formdict = cookiemanager.CookieManager.GetLast(self.cookie)
+                formdict['button'] = 'Edit' # No infinite loop
+            self.wfile.write('<meta name="viewport" content="width=device-width, initial-scale=1">'.encode('utf-8'))
+            self.wfile.write('<body>'.encode('utf-8'))
+            self.FORM( formdict )
+
         else:
             self.wfile.write('<head>'\
                 '<link href="/formstyle.css" rel="stylesheet" type="text/css">'\
@@ -281,19 +321,44 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
                 break;
         
         # default active buttons
-        actbut = ['search','clear']
+        actbut = ['search','clear','searchdg']
         # default inactive buttons
         deactbut = ['reset']
 
         active_search = cookiemanager.CookieManager.GetSearch(self.cookie)
         sqltab = cookiemanager.CookieManager.GetDbaseObj(self.cookie).SQLtable
 
-        # hidden form choose a line for FORM
+        # hidden form to reselect user/filename
         self.wfile.write(
             '<form action={} method="post" id="fintro">'\
             '<input type="hidden" id="bintro" name="button" value="">'\
             '</form>'.format(self.path).encode('utf-8') )
 
+        # hidden form search name etc.. for replot FORM
+        self.wfile.write(
+            '<form action={} method="post" id="search_back">'\
+            '<input type="hidden" name="search_type" id="search_type" value="0">'\
+            '<input type="hidden" name="search_0" id="search_0" value="0">'\
+            '<input type="hidden" name="search_1" id="search_1" value="0">'\
+            '<input type="hidden" name="button" value="{}">'\
+            '</form>'.format(self.path,type(self).buttondict['search']).encode('utf-8') )
+
+        #dialog (hidden)
+        search_now = cookiemanager.CookieManager.GetSearchName(self.cookie)
+        if cookiemanager.CookieManager.GetSearchMod(self.cookie):
+            search_now += " (modified)"
+        self.wfile.write(
+            '<div id="searchdialog">'\
+                '<center><h2>Search management</h2></center>'\
+                '<h3>Currrent search: {}</h3>'\
+                '<div class="wideflex">'\
+                    '<div class="tallflex">{}</div>'\
+                    '<div class="tallflex">'\
+                    '{}'\
+                    '<button type="button" onClick="hideDialog()" class="dialogbutton">Cancel</button>'\
+                    '</fieldset></div>'\
+                '</div>'\
+            '</div>'.format(search_now, self._searchchoose(), self._searchname() ).encode('utf-8') )
         if button == 'research':
             # Modify Last Search
             if active_search is None:
@@ -612,6 +677,15 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '<input type="button" onClick="TableDelete()" id="TCDelete" class="dialogbutton" value="Delete" disabled>'\
         '</fieldset>'.format('</option><option>'.join(tlist))        
 
+    def _searchchoose( self ):
+        slist = ['']+cookiemanager.CookieManager.Persistent(self.cookie).SearchNames()
+        return '<fieldset id="fschoose"><legend>Existing searches</legend>'\
+        '<select name="searchchoose" id="searchchoose" onChange="SearchChooseChanger()"><option>{}</option></select><br>'\
+        '<input type="button" onClick="SearchChoose()" class="dialogbutton" id="SCSelect" value="Select" disabled><br>'\
+        '<input type="button" onClick="SearchRename()" id="SCRename" class="dialogbutton" value="Rename" disabled><br>'\
+        '<input type="button" onClick="SearchDelete()" id="SCDelete" class="dialogbutton" value="Delete" disabled>'\
+        '</fieldset>'.format('</option><option>'.join(slist))        
+
     def _tablename( self ):
         tlist = cookiemanager.CookieManager.Persistent( self.cookie ).TableNames()
         return '<fieldset id="fsnames"><legend>New format name</legend>'\
@@ -619,14 +693,23 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         '<input type="button" onClick="TableName()" class="dialogbutton" id="tablenameok" value="Ok" disabled>'\
         '</fieldset>'.format(''.join(['<option value={}>'.format(t) for t in tlist]))        
 
+    def _searchname( self ):
+        slist = cookiemanager.CookieManager.Persistent( self.cookie ).SearchNames()
+        return '<fieldset id="fsnames"><legend>New search name</legend>'\
+        '<input list="searchnames" name="searchname" id="searchname" onInput="NameChanger()"><datalist id="searchnames">{}</datalist><br>'\
+        '<input type="button" onClick="SearchName()" class="dialogbutton" id="searchnameok" value="Ok" disabled>'\
+        '</fieldset>'.format(''.join(['<option value={}>'.format(t) for t in slist]))        
+
     def _buttons( self, active_buttons, disabled_buttons ):
         blist=''
-        for bl in [['Table','table',],['Search','search','next','back','research',],['Form','reset','clear',],['Record','copy','add','save','delete'],]:
+        for bl in [['Table','table',],['Search','search','next','back','research','searchdg',],['Form','reset','clear',],['Record','copy','add','save','delete'],]:
             blist += '<fieldset><legend>{}</legend>'.format(bl[0])
             for b in bl[1:]:
                 disabled = "disabled" if b in disabled_buttons else ""
                 if b == 'delete':
                     blist += '<input id={} name="button" onClick="DeleteRecord()" type="button" value="{}" {}>'.format(b,type(self).buttondict[b],disabled)
+                elif b == 'searchdg':
+                    blist += '<input id={} name="button" onClick="showDialog()" type="button" value="{}" {}>'.format(b,type(self).buttondict[b],disabled)
                 else:
                     blist += '<input id={} name="button" type="submit" value="{}" {}>'.format(b,type(self).buttondict[b],disabled)
             blist += '</fieldset>'

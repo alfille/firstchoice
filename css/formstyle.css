@@ -15,6 +15,48 @@ body {
     font-variant: normal;
     text-transform: none;
     }
+#searchdialog {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1000; /* Sit on top */
+  left: 8px;
+  top: 8px;
+  /*width: 100%; */ /* Full width */
+  /*height: 100%; */ /* 0 -> Full height */
+  overflow: auto; /* Enable scroll if needed */
+  color: black;
+  outline: 8px ridge threedface;
+  background-color: rgb(0,255,255); /* Fallback color */
+  background-color: rgba(0,255,255,0.9); /* Black w/ opacity */
+}
+.dialogbutton {
+    padding: .5rem;
+    font-size: 1rem;
+    background-color: #CCCCFF;
+    color: #0000A9;
+    margin: 10px;
+    float: right;
+    border-radius: 8px;
+}
+.dialogbutton:disabled {
+    background-color: lightgray;
+    }
+.tallflex {
+    display: flex;
+    flex-direction: column;
+    }
+.wideflex {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    }
+#tstatus {
+    background-color:#0000A9;
+    color: white;
+    z-index: 10;
+    top: 0;
+    position: sticky;
+    }
 .texta {
     background-color: #00A9A9;
     color:black;
@@ -83,6 +125,7 @@ input[type="button"], input[type="submit"]  {
 #savesearch { background-color: #8CD7EE }
 #getsearch { background-color: #8CD7EE }
 #research { background-color: #66B3FF }
+#searchdg { background-color: #4693DF }
 #next { background-color: #8CD7EE }
 #back { background-color: #8CD7EE }
 #save { background-color: #B1FABB }
