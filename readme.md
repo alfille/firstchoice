@@ -19,30 +19,46 @@ Paul H Alfille 2020
     + [Design](#design)
   * [Alternatives](#alternatives)
   * [License](#license)
+- [Get the program](#get-the-program)
+- [Run the program (server)](#run-the-program--server-)
+- [Web browser](#web-browser)
+  * [Choose Database file and user](#choose-database-file-and-user)
+  * [Form view](#form-view)
+  * [Table view](#table-view)
+- [First Choice Database Format Information](#first-choice-database-format-information)
   * [Details](#details)
     + [Size](#size)
     + [Numbers](#numbers)
     + ["Magic" File ID](#-magic--file-id)
     + [Record types](#record-types)
     + [Header](#header)
+    + [Empties list](#empties-list)
+    + [Text Encoding](#text-encoding)
+      - [Types](#types)
+      - [Additive attributes](#additive-attributes)
+      - [Exclusive attributes](#exclusive-attributes)
+      - [General format](#general-format)
+      - [Text bytes -- 1 byte char](#text-bytes----1-byte-char)
+      - [Text bytes -- 2 byte char](#text-bytes----2-byte-char)
+      - [Text bytes -- 3 byte char](#text-bytes----3-byte-char)
     + [Form Description Record](#form-description-record)
       - [Screen Layout](#screen-layout)
       - [Form Field](#form-field)
-      - [Background Text Encoding](#background-text-encoding)
       - [Field Name Encoding](#field-name-encoding)
     + [Data Record](#data-record)
       - [Data Field](#data-field)
     + [Table View](#table-view)
       - [Field width](#field-width)
     + [Program Record](#program-record)
-      - [Progral line](#progral-line)
+      - [Program line](#program-line)
     + [Deleted Record / Empty Block](#deleted-record---empty-block)
     + [Continuation Record](#continuation-record)
 
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 ## History
 ### Why First Choice
-I found First Choice a great solution for indexing collections for myself and my wife, back in the early DOS days. Although Windows and other developements left that program behind, the program still functions, especially in DOSBOX. I run it on Windows, Linux, Mac and even a Chromebook.
+I found First Choice a great solution for indexing collections for myself and my wife, back in the early DOS days. Although Windows and other developments left that program behind, the program still functions, especially in DOSBOX. I run it on Windows, Linux, Mac and even a Chromebook.
 
 The problem with this approach is that in a multi-computer environment (it's 2020!) the program needs to run locally. While the file can be copied over the network prior to program start, and back at the end, it's a fragile process.
 
@@ -54,12 +70,12 @@ My first conversion programs were quite successful. See the Sourceforge page: [f
 This is a set of perl and C programs that can extract the data to HTML (Which is easy to manipulate for display).
 
 ### Current Approach
-While extracting data is nice, it would be nice to have a server-based multiuser database with conversion from and to the original First Choice format. The goal is to make the database view and editting web-based.
+While extracting data is nice, it would be nice to have a server-based multiuser database with conversion from and to the original First Choice format. The goal is to make the database view and editing web-based.
 
 ### Design
 * Data extraction with Python3
 * Data conversion to SQLite3 for on-line use
-* Data converion back to FirstChoice .FOL with python3
+* Data conversion back to FirstChoice .FOL with python3
 * Add journal and backup in SQL
 
 ![Web based](images/Web.svg)
@@ -193,14 +209,14 @@ Always 5th block (block 4)
 * Background text
 * Data text
 
-#### Addative attributes
+#### Additive attributes
 * **Bold** on/off
 * *Italic* on/off
 * _Underline_ on/off
 * These attributes are addative
 
 #### Exclusive attributes
-* Nornal
+* Normal
 * Superscript
 * Subscript
 * These attributes are mutually exclusive, but can be combined with Bold/Italic/Underline
