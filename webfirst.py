@@ -1,4 +1,7 @@
-# http_server_GET.py
+# FirstChoice Web interface
+# Paul H Alfille 2021
+# MIT license
+# http://github.com/alfille/firstchoice
 
 try:
     import http.server
@@ -49,6 +52,7 @@ import persistent
 import searchstate
 import dbaselist
 import cookiemanager
+import common
 
 class GetHandler(http.server.BaseHTTPRequestHandler):
     buttondict = {
@@ -845,12 +849,8 @@ def CommandLineArgs( cl ):
     cl.add_argument("-p","--port",help="server port number",type=int,default=8080,nargs="?")
 
 if __name__ == '__main__':
-    def CommandLineInterp( args ):
-        first.CommandLineInterp( args )
-
-        global ArgData
-        ArgData = args.data or 0
-
+    def CommandLineInterp( ):
+        first.CommandLineInterp( )
 
     def CommandLine():
         """Setup argparser object to process the command line"""
@@ -859,19 +859,14 @@ if __name__ == '__main__':
         return cl.parse_args()
 
 if __name__ == '__main__':
-    args = CommandLine() # Get args from command line
-    CommandLineInterp( args )
-    
-    #debug
-    persistent.ArgSQL = 1
-    sqlfirst.ArgSQL = 1
+    common.args = CommandLine() # Get args from command line
+    CommandLineInterp( )
 
     try:
-        server = http.server.HTTPServer( (args.addr, args.port), GetHandler)
-        #server = http.server.HTTPServer(('localhost', 8080), GetHandler)
+        server = http.server.HTTPServer( (common.args.addr, common.args.port), GetHandler)
     except:
-        print("Could not start server -- is another instance already using port={}?".format(args.port) )
+        print("Could not start server -- is another instance already using port={}?".format(common.args.port) )
         exit()
-    print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(args.addr,args.port))
+    print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(common.args.addr,common.args.port))
 
     server.serve_forever()

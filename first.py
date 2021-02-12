@@ -39,6 +39,8 @@ except:
     print("Please install the textwrap module")
     print("\tit should be part of the standard python3 distribution")
     raise
+
+import common
     
 BLOCKSIZE = 128
 ArgVerbose = 0
@@ -992,18 +994,18 @@ def CommandLineArgs( cl ):
         cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
         cl.add_argument("-v","--verbose",help="Add more output",action="count")
 
-def CommandLineInterp( args ):
+def CommandLineInterp(  ):
     global ArgVerbose
-    ArgVerbose = args.verbose or 0
+    ArgVerbose = common.args.verbose or 0
 
     global ArgFields
-    ArgFields = args.fields or 0
+    ArgFields = common.args.fields or 0
 
     global ArgBlocks
-    ArgBlocks = args.blocks or 0
+    ArgBlocks = common.args.blocks or 0
 
     global ArgData
-    ArgData = args.data or 0
+    ArgData = common.args.data or 0
 
 if __name__ == '__main__':
     def signal_handler( signal, frame ):
@@ -1023,8 +1025,8 @@ if __name__ == '__main__': # command line
     First Choice FOL_handler File
     *.fol
     """
-    args = CommandLine() # Get args from command line
-    CommandLineInterp( args )
+    common.args = CommandLine() # Get args from command line
+    CommandLineInterp( )
     
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )

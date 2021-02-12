@@ -10,7 +10,7 @@ except:
     print("\tit should be part of the standard python3 distribution")
     raise
     
-ArgSQL = 0
+import common
 
 def FC2SQLquery( fld, fol_string ):
     # converts an first choice query to sqlite3 syntax
@@ -121,7 +121,6 @@ class SQL_table:
         self.updated = 0
         self.deleted = 0
 
-        global ArgSQL
         if sqlfile is not None:
             self.connection = sqlite3.connect(sqlfile)
         else:
@@ -129,7 +128,7 @@ class SQL_table:
             
         # Delete old table
         if sqlfile is not None:
-            if ArgSQL > 0 :
+            if common.args.sql > 0 :
                 print('DROP TABLE IF EXISTS first')
             cursor = self.connection.cursor()
             cursor.execute('DROP TABLE IF EXISTS first')
@@ -137,24 +136,22 @@ class SQL_table:
         
         # Create new table
         self.field_list = field_list
-        if ArgSQL > 0 :
+        if common.args.sql > 0 :
             print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) )
         cursor = self.connection.cursor()
         cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) ) 
         self.connection.commit()
 
     def AllDataGet( self ):
-        global ArgSQL
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('SELECT {} FROM first'.format(','.join(self.field_list) ) )
         cursor = self.connection.cursor()
         cursor.execute('SELECT {} FROM first'.format(','.join(self.field_list)) )
         return cursor.fetchall()
 
     def AllDataPut( self, full_data_list ):
-        global ArgSQL
         # Add all data
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*len(self.field_list)))),"<Full Data List>")
         cursor = self.connection.cursor()
         cursor.executemany('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*len(self.field_list)))), full_data_list )
@@ -169,17 +166,15 @@ class SQL_table:
         return (ID,) + r
             
     def SearchDict( self, search_dict ):
-        global ArgSQL
         # Searches using a dict of field criteria (blank ignored)
         where, params = self.where( search_dict )
         #print(where,params)
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('SELECT _ID FROM first {}'.format(where) , params )
         cursor = self.connection.cursor()
         return cursor.execute('SELECT _ID FROM first {}'.format(where) , params ).fetchall()
 
     def SortedSearchDict( self, flist, search_dict ):
-        global ArgSQL
         # Search for a set of fields with the given criteria
         # return tuples of the field list ordered by field
         # Searches using a dict of field criteria (blank ignored)
@@ -194,13 +189,12 @@ class SQL_table:
             fields = ','.join(self.field_list)
         else:
             fields = ','.join(flist)
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('SELECT _ID, {} FROM first {} ORDER BY {} '.format(where,fields,fields) , params )
         cursor = self.connection.cursor()
         return cursor.execute('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,where,fields), params ).fetchall()
 
     def Search( self, search_tuple ):
-        global ArgSQL
         # Searches using a tuple of field criteria (one for each field but blank ignored)
         # by constructing a dict
         return self.SearchDict( {f:s for f,s in zip( self.field_list, search_tuple ) if s is not None and len(s.strip())>0 } )
@@ -229,10 +223,9 @@ class SQL_table:
             )
 
     def Insert( self, data_tuple ):
-        global ArgSQL
         # Create a new SQL record
         # return the new _ID
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*(len(self.field_list)+1)))),data_tuple+(1,))
         cursor = self.connection.cursor()
         cursor.execute('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*(len(self.field_list)+1)))),data_tuple+(1,))
@@ -242,9 +235,8 @@ class SQL_table:
         return cursor.lastrowid
         
     def Update( self, ID, data_tuple ):
-        global ArgSQL
         # Update an SQL record
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in self.field_list])),data_tuple+(ID,) )
         cursor = self.connection.cursor()
         cursor.execute('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in self.field_list])),data_tuple+(ID,) )
@@ -253,9 +245,8 @@ class SQL_table:
         self.updated=cursor.fetchone()[0]
         
     def Delete( self, ID ):
-        global ArgSQL
         # Delete an SQL record
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('DELETE FROM first WHERE _ID=?',(ID,) )
         cursor = self.connection.cursor()
         cursor.execute('DELETE FROM first WHERE _ID=?',(ID,) )
@@ -270,10 +261,9 @@ class SQL_table:
     def FindID( self, ID=None ):
         # return tuple of field values, except _ID
         # ID = None for blank (new) record
-        global ArgSQL
         if ID is None:
             return tuple( ' ' * len(self.field_list))
-        if ArgSQL > 0:
+        if common.args.sql > 0:
             print('SELECT {} FROM first WHERE _ID=?'.format(','.join(self.field_list)),(ID,))
         cursor = self.connection.cursor()
         cursor.execute('SELECT {} FROM first WHERE _ID=?'.format(','.join(self.field_list)),(ID,))

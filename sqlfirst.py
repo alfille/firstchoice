@@ -14,8 +14,7 @@ except:
        
 import first
 import sqltable
-
-ArgSQL = 0
+import common
 
 def SqlField( field ):
     return field.replace(' ','_')
@@ -29,8 +28,7 @@ class SQL_FOL_handler(first.FOL_handler):
         # Read in the FOL file (dbase) into an sql database sqlfile -- None for memory
         # Alternatively use the connection to use an already opened database file
         
-        global ArgSQL
-        sqltable.ArgSQL = ArgSQL
+        sqltable.common.args.sql = common.args.sql
 
         super().__init__( FOLfile,  FOLout, **kwargs)
 
@@ -50,23 +48,34 @@ class SQL_FOL_handler(first.FOL_handler):
         self.data = self.SQLtable.AllDataGet()
         super().Write()
 
+def CommandLineArgs( cl ):
+    first.CommandLineArgs( cl )
+    cl.add_argument("-s","--sql",help="Show SQL statements",action="count")
+
 if __name__ == '__main__':
     def signal_handler( signal, frame ):
         # Signal handler
         # signal.signal( signal.SIGINT, signal.SIG_IGN )
         sys.exit(0)
 
+    def CommandLineInterp( ):
+        first.CommandLineInterp( )
+
+    def CommandLine():
+        """Setup argparser object to process the command line"""
+        cl = argparse.ArgumentParser(description="SQL access to a PFS:First Choice v3 database file (.FOL). 2021 by Paul H Alfille")
+        CommandLineArgs( cl )
+        cl.add_argument("In",help="Existing database file (type .FOL)",type=argparse.FileType('rb'))
+
+        return cl.parse_args()
+
 if __name__ == '__main__': # command line
     """
     First Choice FOL_handler File
     *.fol
     """
-    args = first.CommandLine() # Get args from command line
-    ArgVerbose = args.verbose or 0
-    ArgFields = args.fields or 0
-    ArgBlocks = args.blocks or 0
-    ArgData = args.data or 0
-    ArgSQL = args.sql or 0
+    common.args = CommandLine() # Get args from command line
+    CommandLineInterp( )
     
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, first.signal_handler )
@@ -85,7 +94,6 @@ if __name__ == '__main__': # command line
     sys.exit(None)
     
 else: #module
-    first.ArgSQL = 1
     def OpenDatabase( databasename ):
         return SQL_FOL_handler( databasename )
         
