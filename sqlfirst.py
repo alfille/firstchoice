@@ -28,8 +28,6 @@ class SQL_FOL_handler(first.FOL_handler):
         # Read in the FOL file (dbase) into an sql database sqlfile -- None for memory
         # Alternatively use the connection to use an already opened database file
         
-        sqltable.common.args.sql = common.args.sql
-
         super().__init__( FOLfile,  FOLout, **kwargs)
 
         # Create new table

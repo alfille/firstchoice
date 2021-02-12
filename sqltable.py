@@ -128,7 +128,7 @@ class SQL_table:
             
         # Delete old table
         if sqlfile is not None:
-            if common.args.sql > 0 :
+            if common.args.sql:
                 print('DROP TABLE IF EXISTS first')
             cursor = self.connection.cursor()
             cursor.execute('DROP TABLE IF EXISTS first')
@@ -136,14 +136,14 @@ class SQL_table:
         
         # Create new table
         self.field_list = field_list
-        if common.args.sql > 0 :
+        if common.args.sql:
             print('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) )
         cursor = self.connection.cursor()
         cursor.execute('CREATE TABLE first ( _ID INTEGER PRIMARY KEY, {}, _ADDED INTEGER DEFAULT 0, _CHANGED INTEGER DEFAULT 0)'.format(','.join([f+' TEXT' for f in field_list])) ) 
         self.connection.commit()
 
     def AllDataGet( self ):
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT {} FROM first'.format(','.join(self.field_list) ) )
         cursor = self.connection.cursor()
         cursor.execute('SELECT {} FROM first'.format(','.join(self.field_list)) )
@@ -151,7 +151,7 @@ class SQL_table:
 
     def AllDataPut( self, full_data_list ):
         # Add all data
-        if common.args.sql > 0:
+        if common.args.sql:
             print('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*len(self.field_list)))),"<Full Data List>")
         cursor = self.connection.cursor()
         cursor.executemany('INSERT INTO first ( {} ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*len(self.field_list)))), full_data_list )
@@ -169,7 +169,7 @@ class SQL_table:
         # Searches using a dict of field criteria (blank ignored)
         where, params = self.where( search_dict )
         #print(where,params)
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT _ID FROM first {}'.format(where) , params )
         cursor = self.connection.cursor()
         return cursor.execute('SELECT _ID FROM first {}'.format(where) , params ).fetchall()
@@ -189,7 +189,7 @@ class SQL_table:
             fields = ','.join(self.field_list)
         else:
             fields = ','.join(flist)
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT _ID, {} FROM first {} ORDER BY {} '.format(where,fields,fields) , params )
         cursor = self.connection.cursor()
         return cursor.execute('SELECT _ID,{} FROM first {} ORDER BY {} '.format(fields,where,fields), params ).fetchall()
@@ -225,7 +225,7 @@ class SQL_table:
     def Insert( self, data_tuple ):
         # Create a new SQL record
         # return the new _ID
-        if common.args.sql > 0:
+        if common.args.sql:
             print('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*(len(self.field_list)+1)))),data_tuple+(1,))
         cursor = self.connection.cursor()
         cursor.execute('INSERT INTO first ( {}, _ADDED ) VALUES ( {} )'.format(','.join(self.field_list),','.join(list('?'*(len(self.field_list)+1)))),data_tuple+(1,))
@@ -236,7 +236,7 @@ class SQL_table:
         
     def Update( self, ID, data_tuple ):
         # Update an SQL record
-        if common.args.sql > 0:
+        if common.args.sql:
             print('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in self.field_list])),data_tuple+(ID,) )
         cursor = self.connection.cursor()
         cursor.execute('UPDATE first SET {}, _CHANGED=1 WHERE _ID=?'.format(','.join(['{}=?'.format(f) for f in self.field_list])),data_tuple+(ID,) )
@@ -246,7 +246,7 @@ class SQL_table:
         
     def Delete( self, ID ):
         # Delete an SQL record
-        if common.args.sql > 0:
+        if common.args.sql:
             print('DELETE FROM first WHERE _ID=?',(ID,) )
         cursor = self.connection.cursor()
         cursor.execute('DELETE FROM first WHERE _ID=?',(ID,) )
@@ -263,7 +263,7 @@ class SQL_table:
         # ID = None for blank (new) record
         if ID is None:
             return tuple( ' ' * len(self.field_list))
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT {} FROM first WHERE _ID=?'.format(','.join(self.field_list)),(ID,))
         cursor = self.connection.cursor()
         cursor.execute('SELECT {} FROM first WHERE _ID=?'.format(','.join(self.field_list)),(ID,))

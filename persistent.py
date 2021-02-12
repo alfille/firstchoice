@@ -33,11 +33,11 @@ class SQL_persistent:
     def _Connect( cls ):
         # class method because filelist and userlist are class methods
         connection = sqlite3.connect('persistent.db')
-        if common.args.sql > 0:
+        if common.args.sql:
             print('CREATE TABLE IF NOT EXISTS persistent (user TEXT NOT NULL, filename TEXT NOT NULL, ptype TEXT NOT NULL, NAME TEXT  NOT NULL, jsondata TEXT)' )
         cursor = connection.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS persistent (user TEXT NOT NULL, filename TEXT NOT NULL, ptype TEXT NOT NULL, NAME TEXT  NOT NULL, jsondata TEXT)' )
-        if common.args.sql > 0:
+        if common.args.sql:
             print('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
         cursor = connection.cursor()
         cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS ipersistent ON persistent (user, filename , ptype , NAME )' )
@@ -47,7 +47,7 @@ class SQL_persistent:
     @classmethod
     def Userlist( cls ):
         connection = cls._Connect()
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT DISTINCT user FROM persistent ORDER BY user')
         cursor = connection.cursor()
         users = cursor.execute('SELECT DISTINCT user FROM persistent ORDER BY user' ).fetchall()
@@ -56,14 +56,14 @@ class SQL_persistent:
     @classmethod
     def Filelist( cls ):
         connection = cls._Connect()
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT DISTINCT filename FROM persistent ORDER BY filename')
         cursor = connection.cursor()
         files = cursor.execute('SELECT DISTINCT filename FROM persistent ORDER BY filename' ).fetchall()
         return [f[0] for f in files]
 
     def _NameList( self, ptype ):
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT name FROM persistent WHERE user=? AND filename=? AND ptype=?',(self.user,self.filename,ptype) )
         cursor = self.connection.cursor()
         nm = cursor.execute('SELECT name FROM persistent WHERE user=? AND filename=? AND ptype=?',(self.user,self.filename,ptype) ).fetchall()
@@ -72,21 +72,21 @@ class SQL_persistent:
     def _SetField( self, name, ptype, data ):
         if data is None:
             #Do a DELETE !
-            if common.args.sql > 0:
+            if common.args.sql:
                 print('DELETE FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
             cursor = self.connection.cursor()
             cursor.execute('DELETE FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
             self.connection.commit()
         else:
             j = json.dumps(data)
-            if common.args.sql > 0:
+            if common.args.sql:
                 print('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
             cursor = self.connection.cursor()
             cursor.execute('INSERT OR REPLACE INTO persistent (user,filename,ptype,name,jsondata) VALUES (?,?,?,?,?)',(self.user,self.filename,ptype,name,j) )
             self.connection.commit()
 
     def _GetField( self, name, ptype ):
-        if common.args.sql > 0:
+        if common.args.sql:
             print('SELECT jsondata FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) )
         cursor = self.connection.cursor()
         j = cursor.execute('SELECT jsondata FROM persistent WHERE user=? AND filename=? AND ptype=? AND name=?',(self.user,self.filename,ptype,name) ).fetchone()
