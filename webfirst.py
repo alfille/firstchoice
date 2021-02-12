@@ -34,8 +34,17 @@ except:
     print("Please install the os module")
     print("\tit should be part of the standard python3 distribution")
     raise
+
+try:
+    import argparse # for parsing the command line
+except:
+    print("Please install the argparse module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
+
     
 import sqlfirst
+import first
 import persistent
 import searchstate
 import dbaselist
@@ -829,20 +838,40 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
     def _set_cookie( self ):
         self.cookie = cookiemanager.CookieManager.NewSession()
 
-if __name__ == '__main__':
-    
-    addr = 'localhost'
-    port = 8080
+def CommandLineArgs( cl ):
+    first.CommandLineArgs( cl )
+    cl.add_argument("-s","--sql",help="Show SQL statements",action="count")
+    cl.add_argument("-a","--addr",help="server ip address or hostname",default="localhost",nargs="?")
+    cl.add_argument("-p","--port",help="server port number",type=int,default=8080,nargs="?")
 
+if __name__ == '__main__':
+    def CommandLineInterp( args ):
+        first.CommandLineInterp( args )
+
+        global ArgData
+        ArgData = args.data or 0
+
+
+    def CommandLine():
+        """Setup argparser object to process the command line"""
+        cl = argparse.ArgumentParser(description="Web access to a PFS:First Choice v3 database file (.FOL). 2021 by Paul H Alfille")
+        CommandLineArgs( cl )
+        return cl.parse_args()
+
+if __name__ == '__main__':
+    args = CommandLine() # Get args from command line
+    CommandLineInterp( args )
+    
     #debug
     persistent.ArgSQL = 1
     sqlfirst.ArgSQL = 1
 
     try:
-        server = http.server.HTTPServer((addr, port), GetHandler)
+        server = http.server.HTTPServer( (args.addr, args.port), GetHandler)
+        #server = http.server.HTTPServer(('localhost', 8080), GetHandler)
     except:
-        print("Could not start server -- is another instance already using that port?")
+        print("Could not start server -- is another instance already using port={}?".format(args.port) )
         exit()
-    print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(addr,port))
+    print('Starting server address={} port={}, use <Ctrl-C> to stop'.format(args.addr,args.port))
 
     server.serve_forever()

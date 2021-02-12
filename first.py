@@ -26,12 +26,12 @@ if __name__ == "__main__":
         print("\tit should be part of the standard python3 distribution")
         raise
     
-    try:
-        import argparse # for parsing the command line
-    except:
-        print("Please install the argparse module")
-        print("\tit should be part of the standard python3 distribution")
-        raise
+try:
+    import argparse # for parsing the command line
+except:
+    print("Please install the argparse module")
+    print("\tit should be part of the standard python3 distribution")
+    raise
 
 try:
     import textwrap
@@ -985,22 +985,37 @@ class DataRecordOut(RecordOut):
         struct.pack_into('>H',ba,0,len(ba)-2+cr)
         return ba
 
+def CommandLineArgs( cl ):
+        cl.add_argument("Out",help="New database file",type=argparse.FileType('wb'),nargs='?',default="OUTPUT.FOL")
+        cl.add_argument("-f","--fields",help="Show database fields (repeat for more detail)",action="count")
+        cl.add_argument("-d","--data",help="Show database data",action="count")
+        cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
+        cl.add_argument("-v","--verbose",help="Add more output",action="count")
+
+def CommandLineInterp( args ):
+    global ArgVerbose
+    ArgVerbose = args.verbose or 0
+
+    global ArgFields
+    ArgFields = args.fields or 0
+
+    global ArgBlocks
+    ArgBlocks = args.blocks or 0
+
+    global ArgData
+    ArgData = args.data or 0
+
 if __name__ == '__main__':
     def signal_handler( signal, frame ):
         # Signal handler
         # signal.signal( signal.SIGINT, signal.SIG_IGN )
         sys.exit(0)
 
-    def CommandLine():
+def CommandLine():
         """Setup argparser object to process the command line"""
         cl = argparse.ArgumentParser(description="Use a PFS:First Choice v3 database file (.FOL) for data access and writing. 2020 by Paul H Alfille")
         cl.add_argument("In",help="Existing database file (type .FOL)",type=argparse.FileType('rb'))
-        cl.add_argument("Out",help="New database file",type=argparse.FileType('wb'),nargs='?',default="OUTPUT.FOL")
-        cl.add_argument("-f","--fields",help="Show database fields (repeat for more detail)",action="count")
-        cl.add_argument("-d","--data",help="Show database data",action="count")
-        cl.add_argument("-b","--blocks",help="Show database block structure",action="count")
-        cl.add_argument("-s","--sql",help="Show SQL statements",action="count")
-        cl.add_argument("-v","--verbose",help="Add more output",action="count")
+        CommandLineArgs( cl )
         return cl.parse_args()
         
 if __name__ == '__main__': # command line
@@ -1009,11 +1024,7 @@ if __name__ == '__main__': # command line
     *.fol
     """
     args = CommandLine() # Get args from command line
-    ArgVerbose = args.verbose or 0
-    ArgFields = args.fields or 0
-    ArgBlocks = args.blocks or 0
-    ArgData = args.data or 0
-    ArgSQL = args.sql or 0
+    CommandLineInterp( args )
     
     # Set up keyboard interrupt handler
     signal.signal(signal.SIGINT, signal_handler )
