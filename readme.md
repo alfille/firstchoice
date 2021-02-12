@@ -46,6 +46,8 @@ I found First Choice a great solution for indexing collections for myself and my
 
 The problem with this approach is that in a multi-computer environment (it's 2020!) the program needs to run locally. While the file can be copied over the network prior to program start, and back at the end, it's a fragile process.
 
+![Classing PFS:First Choice](images/Traditional.svg)
+
 ### Data Extraction
 My first conversion programs were quite successful. See the Sourceforge page: [first2html](http://first2html.sourceforge.net/)
 
@@ -56,17 +58,70 @@ While extracting data is nice, it would be nice to have a server-based multiuser
 
 ### Design
 * Data extraction with Python3
-* Data conversion to SQLite3 for on-line use (via Flask)
+* Data conversion to SQLite3 for on-line use
 * Data converion back to FirstChoice .FOL with python3
-* Add journal and backup in SQL.
+* Add journal and backup in SQL
+
+![Web based](images/Web.svg)
 
 ## Alternatives
 * [FirstOut](https://file-convert.com/fout.htm) -- Comercial, extract only
 * [First2html](http://first2html.sourceforge.net/) -- Open Source, extract only
+* The module first.py can as standalone to parse and write a FOL file. It is used by web program for the FOL parsing.
 
 ## License
 
 FirstChoice  is released under the terms of MIT License.
+
+# Get the program
+[Source](http://github.com/alfille/firstchoice) (pure python3)
+
+# Run the program (server)
+* Should be run as a web server (port 8080 by default)
+* FOL files should be in the parent directory (scanned recursively)
+* Needs many of the standard python modules
+ * sqlite3
+ * http.server, cgi
+ * random, os, textwrap, argparse, sys, struct, signal
+* From the command line:`python3 webfirst.py`
+* Command line arguments are all optional (localhost:8080 is the default)
+![Command Line Options](images/Help.png)
+
+# Web browser
+Find URL of server
+## Choose Database file and user
+![Choose](images/Choose.png)
+
+* user name is arbitrary
+ * Setting like table column layout follow user/file pair
+ * Authorization or auditing could be implemented
+* File must end in <.fol> or <.FOL>
+* File integrity not yet tested
+
+## Form view
+![Form](images/Form.png)
+
+* From here is possible to put a search pattern
+* Add a new record
+* Edit an existing record
+* Copy / Delete a record
+
+## Table view
+![Table](images/Table.png)
+
+* Tables follow the last search
+ * Listed in order by column contents left to right 
+* Click on a record to open it in Form view
+* Columns names can be dragged around
+* Column widths can be dragged (it's tricky)
+* Contents can be downloaded to an Excel-compatible CSV file
+* Columns can layout can be customized in the menu:
+
+![Column menu](images/Columns.png)
+
+ 
+
+# First Choice Database Format Information
 
 ## Details
 Here follows a summary of the discovered fields in a FirstChoice Database.
