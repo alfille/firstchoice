@@ -143,7 +143,7 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         self._head()            
        
         # Send to record or table view
-        print("PAGE PAGE",formdict)
+        #print("PAGE PAGE",formdict)
 
         # Note: initial entry is from "GET" -- with empty formdict        
         if 'button' not in formdict:
@@ -304,13 +304,13 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
 
         # hidden form choose a line for FORM
         self.wfile.write(
+            '<script src="splashscript.js"></script>'\
             '<form action={} method="post" id="ID">'\
-            '<input type="hidden" name="button" value="Edit">'\
+            '<input type="hidden" name="button" id="button" value="Edit">'\
             '</form>'.format(self.path).encode('utf-8') )
 
         self.wfile.write(
             '<div id="splash" class="firststyle">loading database {}...</div>'\
-            '<script src="splashscript.js"></script>'\
             '</body>'.format(filename).encode('utf-8') )
 
         # This does everything
@@ -318,7 +318,12 @@ class GetHandler(http.server.BaseHTTPRequestHandler):
         #  Opens native database
         #  Parses database
         #  Sets field lists
-        cookiemanager.CookieManager.SetUserDbase( self.cookie, user,filename )
+        try:
+            cookiemanager.CookieManager.SetUserDbase( self.cookie, user,filename )
+            self.wfile.write('<script>GoodFile()</script>'.encode('utf-8'))
+        except common.User_Error as error:
+            self.wfile.write('<script>BadFile("{}","{}")</script>'.format(filename,error.value).encode('utf-8'))
+
 
     def FORM( self, formdict ):
         # After a "POST" --- clicking one of the submit buttons

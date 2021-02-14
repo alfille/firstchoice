@@ -81,13 +81,18 @@ if __name__ == '__main__': # command line
     # Start program
     
     # Read in databaase (FOL file already open from command line)
-    dbase_class = SQL_FOL_handler( args.In, args.Out )
+    try:
+        dbase_class = SQL_FOL_handler( args.In, args.Out )
+    except common.User_Error as error:
+        print("Error parsing database file: {}".format(error))
+        dbase_class = None
     
     # Changes could happen here,
     # If nothing else, this is a test of parsing
     
     # Write out file to new database
-    dbase_class.Write()
+    if dbase_class is not None:
+        dbase_class.Write()
 
     sys.exit(None)
     

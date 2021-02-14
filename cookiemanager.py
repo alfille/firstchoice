@@ -24,6 +24,7 @@ except:
 import sqlfirst
 import persistent
 import dbaselist
+import common
 
 class CookieObject:
     def __init__( self ):
@@ -49,8 +50,11 @@ class CookieObject:
         self._user, self._dbasename = user_file
 
         # database object
-        self._dbaseobj = dbaselist.dbaselist( user_file[1] )
-        #print("DBASEOBJ",self._dbaseobj, user_file )
+        try:
+            self._dbaseobj = dbaselist.dbaselist( user_file[1] )
+        except common.User_Error as error:
+            self._dbaseobj = None
+            raise
 
         # persistent database
         self._persistent = persistent.SQL_persistent( *user_file )

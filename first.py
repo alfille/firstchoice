@@ -557,7 +557,10 @@ class FOL_handler:
         if type(FOLfile)==str:
             # given filename, need to open
             self.filename = FOLfile
-            self.FOLfile = open( FOLfile, "rb" )
+            try:
+                self.FOLfile = open( FOLfile, "rb" )
+            except:
+                raise(common.User_Error("Cannot open FOL file {} for reading".format(FOLfile)))
         else: # command line
             #given open file, need filename
             self.FOLfile = FOLfile
@@ -567,7 +570,7 @@ class FOL_handler:
         self.data = [] # List of record data tupples
         self.blocks = [[0,""]] # FOL file read in with continuations merged
 
-        # literal blocks that don't change because we don's support it
+        # literal blocks we won't change because we don't support it
         self.fulldef={
         'form':None,
         'view':None,
@@ -578,7 +581,7 @@ class FOL_handler:
         for n in range(4):
             if not self._read():
                 #print("Cannot read full 4 block header")
-                return
+                raise(common.User_Error("Header truncated in FOL file"))
             headdata += self.block
         self.ReadHeader(headdata)
             
@@ -586,7 +589,7 @@ class FOL_handler:
         for n in range(4):
             if not self._read():
                 #print("Cannot read full second 4 block header")
-                return
+                raise(common.User_Error("Empty blocks list not present (file too short)"))
             halfheader += self.block
         self.ReadEmpties(halfheader)
         
@@ -608,12 +611,18 @@ class FOL_handler:
             self.ParseRecord( t,d )
 
         del(self.blocks)
-        self.FOLfile.close()            
+        self.FOLfile.close()
+
+        if self.fulldef['form'] is None:
+            raise(common.User_Error("No form defined in database {}".format(self.filename)))
 
         if type(FOLout)==str:
             # given filename, need to open
             self.fileoutname = FOLout
-            self.FOLout = open( FOLout, 'wb' )
+            try:
+                self.FOLout = open( FOLout, 'wb' )
+            except:
+                raise(common.User_Error("Cannot open file {} to write database".format(FOLout))) 
         else: # command line
             #given open file, need filename
             self.FOLout = FOLout
@@ -666,8 +675,7 @@ class FOL_handler:
             #print("Blocks don't match")
             pass
         if type(self).gerb != data[4]:
-            #print("GERB doesn't match")
-            pass
+            raise(common.User_Error("GERB doesn't match {} not {}".format(data[4],type(self.gerb))))
 
     def ReadEmpties( self, halfheader ):
         #print("Empties")
@@ -1034,13 +1042,18 @@ if __name__ == '__main__': # command line
     # Start program
     
     # Read in databaase (FOL file already open from command line)
-    dbase_class = FOL_handler( args.In, args.Out )
+    try:
+        dbase_class = FOL_handler( args.In, args.Out )
+    except common.User_Error as error:
+        print("Error processing file: {}".format(error))
+        dbase_class = None
     
     # Changes could happen here,
     # If nothing else, this is a test of parsing
     
     # Write out file to new database
-    dbase_class.Write()
+    if dbase_class is not None:
+        dbase_class.Write()
 
     sys.exit(None)
     

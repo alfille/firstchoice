@@ -14,6 +14,7 @@ except:
     raise
 
 import sqlfirst
+import common
 
 class DbaseField:
     # Convenience class to make finding field information easier
@@ -57,12 +58,16 @@ class dbaselist(object):
         return super( dbaselist, cls).__new__(cls)
     
     def __init__(self, filename):
+        # open and parse database
+        try:
+            self.dbase_class = sqlfirst.OpenDatabase(filename)
+        except common.User_Error as error:
+            self.dbase_class = None
+            raise
+
         # got here, so a new database
         # add to name list
         type(self).existing[filename] = self
-
-        # open and parse database
-        self.dbase_class = sqlfirst.OpenDatabase(filename)
 
         # list of fields
         self._flist = [ DbaseField(f) for f in self.dbase_class.form['fields'] ] 
@@ -82,5 +87,6 @@ class dbaselist(object):
         return glob.glob('../**/*.fol',recursive=True) + glob.glob('../**/*.FOL',recursive=True)
 
     def __del__(self):
-        sqlfirst.SaveDatabase( self.dbase_class, "backup.FOL" )
+        if self.dbase_class is not None:
+            sqlfirst.SaveDatabase( self.dbase_class, "backup.FOL" )
     

@@ -6,3 +6,13 @@
 
 # A single value so far -- set by command line args
 args = None
+
+# Errors
+# class MyError is extended from super class Exception
+class User_Error(Exception):
+   # Constructor method
+   def __init__(self, value):
+      self.value = value
+   # __str__ display function
+   def __str__(self):
+      return(repr(self.value))
